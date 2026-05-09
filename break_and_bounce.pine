@@ -1,0 +1,86 @@
+//@version=5
+strategy("Break & Bounce Strategy", overlay=true, max_bars_back=500)
+
+// ─── INPUTS ───────────────────────────────────────────────────────────────────
+atr_mult = input.float(1.5, "SL ATR Multiplier", minval=0.1)
+tp_mult  = input.float(3.0, "TP ATR Multiplier",  minval=0.1)
+
+// ─── DAILY HIGH / LOW ─────────────────────────────────────────────────────────
+daily_high = request.security(syminfo.tickerid, "D", high[1], lookahead=barmerge.lookahead_on)
+daily_low  = request.security(syminfo.tickerid, "D", low[1],  lookahead=barmerge.lookahead_on)
+
+plot(daily_high, "Daily HIGH", color=color.blue,  linewidth=1, style=plot.style_line)
+plot(daily_low,  "Daily LOW",  color=color.red,   linewidth=1, style=plot.style_line)
+
+// ─── M15 BREAK DETECTION ──────────────────────────────────────────────────────
+// Rulează pe M5; verificăm închiderea M15
+m15_close = request.security(syminfo.tickerid, "15", close[1], lookahead=barmerge.lookahead_on)
+m15_close_prev = request.security(syminfo.tickerid, "15", close[2], lookahead=barmerge.lookahead_on)
+
+bull_break = m15_close > daily_high and m15_close_prev <= daily_high
+bear_break = m15_close < daily_low  and m15_close_prev >= daily_low
+
+var bool bull_break_active = false
+var bool bear_break_active = false
+
+if bull_break
+    bull_break_active := true
+    bear_break_active := false
+if bear_break
+    bear_break_active := true
+    bull_break_active := false
+
+// ─── CANDLESTICK PATTERNS (M5) ────────────────────────────────────────────────
+body      = math.abs(close - open)
+upper_wick = high - math.max(close, open)
+lower_wick = math.min(close, open) - low
+candle_range = high - low
+
+// Hammer: corp mic sus, fitil jos lung, precedat de bearish
+is_hammer = (lower_wick >= body * 2) and (upper_wick <= body * 0.5) and (close[1] < open[1])
+
+// Inverted Hammer: corp mic jos, fitil sus lung, precedat de bullish
+is_inv_hammer = (upper_wick >= body * 2) and (lower_wick <= body * 0.5) and (close[1] > open[1])
+
+// Bullish Engulfing: verde care înghite roșu precedent
+is_bull_engulf = (close > open) and (close[1] < open[1]) and (close > open[1]) and (open < close[1])
+
+// Bearish Engulfing: roșu care înghite verde precedent
+is_bear_engulf = (close < open) and (close[1] > open[1]) and (close < open[1]) and (open > close[1])
+
+// ─── RETEST ───────────────────────────────────────────────────────────────────
+in_bull_retest = bull_break_active and (low <= daily_high) and (close >= daily_high)
+in_bear_retest = bear_break_active and (high >= daily_low)  and (close <= daily_low)
+
+// ─── ENTRY SIGNALS ────────────────────────────────────────────────────────────
+bull_signal = in_bull_retest and (is_hammer or is_bull_engulf)
+bear_signal = in_bear_retest and (is_inv_hammer or is_bear_engulf)
+
+// ─── ATR PENTRU SL/TP ─────────────────────────────────────────────────────────
+atr = ta.atr(14)
+
+// ─── EXECUȚIE ─────────────────────────────────────────────────────────────────
+if bull_signal
+    sl_price = close - atr * atr_mult
+    tp_price = close + atr * tp_mult
+    strategy.entry("BUY", strategy.long)
+    strategy.exit("BUY Exit", "BUY", stop=sl_price, limit=tp_price)
+    bull_break_active := false
+
+if bear_signal
+    sl_price = close + atr * atr_mult
+    tp_price = close - atr * tp_mult
+    strategy.entry("SELL", strategy.short)
+    strategy.exit("SELL Exit", "SELL", stop=sl_price, limit=tp_price)
+    bear_break_active := false
+
+// ─── VIZUALIZARE ──────────────────────────────────────────────────────────────
+plotshape(bull_signal, "BUY Signal",  shape.labelup,   location.belowbar, color.green, text="B&B BUY",  size=size.small)
+plotshape(bear_signal, "SELL Signal", shape.labeldown, location.abovebar, color.red,   text="B&B SELL", size=size.small)
+
+bgcolor(bull_break_active ? color.new(color.green, 92) : na)
+bgcolor(bear_break_active ? color.new(color.red,   92) : na)
+
+// ─── ALERTE ───────────────────────────────────────────────────────────────────
+alertcondition(bull_signal, "B&B BUY",  "Break & Bounce BUY - Retest confirmat bullish")
+alertcondition(bear_signal, "B&B SELL", "Break & Bounce SELL - Retest confirmat bearish")
