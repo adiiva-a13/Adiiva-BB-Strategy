@@ -5,6 +5,9 @@ strategy("Break & Bounce Strategy", overlay=true, max_bars_back=500)
 atr_mult = input.float(1.5, "SL ATR Multiplier", minval=0.1)
 tp_mult  = input.float(3.0, "TP ATR Multiplier",  minval=0.1)
 
+// ─── SESIUNEA NY (ora României UTC+3: 16:30 - 18:00) ─────────────────────────
+ny_session = time(timeframe.period, "1630-1800:23456", "Europe/Bucharest")
+
 // ─── DAILY HIGH / LOW ─────────────────────────────────────────────────────────
 daily_high = request.security(syminfo.tickerid, "D", high[1], lookahead=barmerge.lookahead_on)
 daily_low  = request.security(syminfo.tickerid, "D", low[1],  lookahead=barmerge.lookahead_on)
@@ -60,14 +63,14 @@ bear_signal = in_bear_retest and (is_inv_hammer or is_bear_engulf)
 atr = ta.atr(14)
 
 // ─── EXECUȚIE ─────────────────────────────────────────────────────────────────
-if bull_signal
+if bull_signal and not na(ny_session)
     sl_price = close - atr * atr_mult
     tp_price = close + atr * tp_mult
     strategy.entry("BUY", strategy.long)
     strategy.exit("BUY Exit", "BUY", stop=sl_price, limit=tp_price)
     bull_break_active := false
 
-if bear_signal
+if bear_signal and not na(ny_session)
     sl_price = close + atr * atr_mult
     tp_price = close - atr * tp_mult
     strategy.entry("SELL", strategy.short)
@@ -80,6 +83,7 @@ plotshape(bear_signal, "SELL Signal", shape.labeldown, location.abovebar, color.
 
 bgcolor(bull_break_active ? color.new(color.green, 92) : na)
 bgcolor(bear_break_active ? color.new(color.red,   92) : na)
+bgcolor(not na(ny_session) ? color.new(color.yellow, 93) : na, title="NY Session")
 
 // ─── ALERTE ───────────────────────────────────────────────────────────────────
 alertcondition(bull_signal, "B&B BUY",  "Break & Bounce BUY - Retest confirmat bullish")
