@@ -1,6 +1,10 @@
 //@version=5
 strategy("Break & Bounce Strategy", overlay=true, max_bars_back=500)
 
+// ─── TIMEFRAME GUARD ───────────────────────────────────────────────────────────────
+if timeframe.period != "5"
+    runtime.error("Break & Bounce trebuie rulat pe timeframe M5!")
+
 // ─── INPUTS ───────────────────────────────────────────────────────────────────
 atr_mult = input.float(1.5, "SL ATR Multiplier", minval=0.1)
 tp_mult  = input.float(3.0, "TP ATR Multiplier",  minval=0.1)
@@ -38,18 +42,17 @@ if bear_break
 body        = math.abs(close - open)
 upper_wick  = high - math.max(close, open)
 lower_wick  = math.min(close, open) - low
-candle_range = high - low
 
-// Hammer: corp mic sus, fitil jos lung, precedat de bearish
+// Hammer: fitil jos lung, corp mic sus, precedat de bearish → BUY
 is_hammer = (lower_wick >= body * 2) and (upper_wick <= body * 0.5) and (close[1] < open[1])
 
-// Inverted Hammer: corp mic jos, fitil sus lung, precedat de bullish
-is_inv_hammer = (upper_wick >= body * 2) and (lower_wick <= body * 0.5) and (close[1] > open[1])
+// Shooting Star: fitil sus lung, corp mic jos, precedat de bullish → SELL
+is_shooting_star = (upper_wick >= body * 2) and (lower_wick <= body * 0.5) and (close[1] > open[1])
 
-// Bullish Engulfing: verde care înghite roșu precedent
+// Bullish Engulfing: verde care înghite roșu precedent → BUY
 is_bull_engulf = (close > open) and (close[1] < open[1]) and (close > open[1]) and (open < close[1])
 
-// Bearish Engulfing: roșu care înghite verde precedent
+// Bearish Engulfing: roșu care înghite verde precedent → SELL
 is_bear_engulf = (close < open) and (close[1] > open[1]) and (close < open[1]) and (open > close[1])
 
 // ─── RETEST ───────────────────────────────────────────────────────────────────
@@ -58,7 +61,7 @@ in_bear_retest = bear_break_active and (high >= daily_low)  and (close <= daily_
 
 // ─── ENTRY SIGNALS ────────────────────────────────────────────────────────────
 bull_signal = in_bull_retest and (is_hammer or is_bull_engulf)
-bear_signal = in_bear_retest and (is_inv_hammer or is_bear_engulf)
+bear_signal = in_bear_retest and (is_shooting_star or is_bear_engulf)
 
 // ─── ATR PENTRU SL/TP ─────────────────────────────────────────────────────────
 atr = ta.atr(14)
