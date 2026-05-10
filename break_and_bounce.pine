@@ -5,8 +5,8 @@ strategy("Break & Bounce Strategy", overlay=true, max_bars_back=500)
 atr_mult = input.float(1.5, "SL ATR Multiplier", minval=0.1)
 tp_mult  = input.float(3.0, "TP ATR Multiplier",  minval=0.1)
 
-// ─── SESIUNEA NY (ora României UTC+3: 16:30 - 18:00) ─────────────────────────
-ny_session = time(timeframe.period, "1630-1800:23456", "Europe/Bucharest")
+// ─── SESIUNEA NY (ora României UTC+3: 16:30 - 19:00, maxim 2.5h) ─────────────
+ny_session = time(timeframe.period, "1630-1900:23456", "Europe/Bucharest")
 
 // ─── DAILY HIGH / LOW ─────────────────────────────────────────────────────────
 daily_high = request.security(syminfo.tickerid, "D", high[1], lookahead=barmerge.lookahead_on)
@@ -15,13 +15,14 @@ daily_low  = request.security(syminfo.tickerid, "D", low[1],  lookahead=barmerge
 plot(daily_high, "Daily HIGH", color=color.blue,  linewidth=1, style=plot.style_line)
 plot(daily_low,  "Daily LOW",  color=color.red,   linewidth=1, style=plot.style_line)
 
-// ─── M15 BREAK DETECTION ──────────────────────────────────────────────────────
-// Rulează pe M5; verificăm închiderea M15
-m15_close = request.security(syminfo.tickerid, "15", close[1], lookahead=barmerge.lookahead_on)
+// ─── M15 BREAK DETECTION (filtrat la sesiunea NY) ─────────────────────────────
+// Break valid doar dacă lumânarea M15 se închide în fereastra sesiunii NY.
+// Fără filtru, break-uri din alte ore ale zilei ar putea activa semnale.
+m15_close      = request.security(syminfo.tickerid, "15", close[1], lookahead=barmerge.lookahead_on)
 m15_close_prev = request.security(syminfo.tickerid, "15", close[2], lookahead=barmerge.lookahead_on)
 
-bull_break = m15_close > daily_high and m15_close_prev <= daily_high
-bear_break = m15_close < daily_low  and m15_close_prev >= daily_low
+bull_break = m15_close > daily_high and m15_close_prev <= daily_high and not na(ny_session)
+bear_break = m15_close < daily_low  and m15_close_prev >= daily_low  and not na(ny_session)
 
 var bool bull_break_active = false
 var bool bear_break_active = false
@@ -34,9 +35,9 @@ if bear_break
     bull_break_active := false
 
 // ─── CANDLESTICK PATTERNS (M5) ────────────────────────────────────────────────
-body      = math.abs(close - open)
-upper_wick = high - math.max(close, open)
-lower_wick = math.min(close, open) - low
+body        = math.abs(close - open)
+upper_wick  = high - math.max(close, open)
+lower_wick  = math.min(close, open) - low
 candle_range = high - low
 
 // Hammer: corp mic sus, fitil jos lung, precedat de bearish
