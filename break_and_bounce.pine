@@ -5,8 +5,14 @@ strategy("Break & Bounce Strategy", overlay=true, max_bars_back=500)
 if timeframe.period != "5"
     runtime.error("Break & Bounce trebuie rulat pe timeframe M5!")
 
-// ─── SESIUNEA NY (ora României UTC+3: 16:30 - 19:00, maxim 2.5h) ─────────────
-ny_session = time(timeframe.period, "1630-1900:23456", "Europe/Bucharest")
+// ─── SESIUNEA NY (ora României: 16:30 - 19:00 INCLUSIV) ────────────────────────
+// "1630-1905" include bara M5 care se deschide la 19:00 (se închide la 19:05)
+ny_session = time(timeframe.period, "1630-1905:23456", "Europe/Bucharest")
+
+// ─── UN SINGUR TRADE PE ZI ───────────────────────────────────────────────────────
+var bool traded_today = false
+if ta.change(dayofmonth)
+    traded_today := false
 
 // ─── DAILY HIGH / LOW ─────────────────────────────────────────────────────────
 daily_high = request.security(syminfo.tickerid, "D", high[1], lookahead=barmerge.lookahead_on)
@@ -33,21 +39,27 @@ if bear_break
     bull_break_active := false
 
 // ─── CANDLESTICK PATTERNS (M5) ────────────────────────────────────────────────
-body        = math.abs(close - open)
-upper_wick  = high - math.max(close, open)
-lower_wick  = math.min(close, open) - low
+body       = math.abs(close - open)
+upper_wick = high - math.max(close, open)
+lower_wick = math.min(close, open) - low
 
-// Hammer: fitil jos lung, corp mic sus, precedat de bearish → BUY
-is_hammer = (lower_wick >= body * 2) and (upper_wick <= body * 0.5) and (close[1] < open[1])
+// Hammer: fitil jos lung, corp mic sus, precedat de minim 3 lumânări bearish → BUY
+is_hammer = (lower_wick >= body * 2) and (upper_wick <= body * 0.5) and
+             (close[1] < open[1]) and (close[2] < open[2]) and (close[3] < open[3])
 
-// Shooting Star: fitil sus lung, corp mic jos, precedat de bullish → SELL
-is_shooting_star = (upper_wick >= body * 2) and (lower_wick <= body * 0.5) and (close[1] > open[1])
+// Shooting Star: fitil sus lung, corp mic jos, precedat de minim 3 lumânări bullish → SELL
+is_shooting_star = (upper_wick >= body * 2) and (lower_wick <= body * 0.5) and
+                   (close[1] > open[1]) and (close[2] > open[2]) and (close[3] > open[3])
 
-// Bullish Engulfing: verde care înghite roșu precedent → BUY
-is_bull_engulf = (close > open) and (close[1] < open[1]) and (close > open[1]) and (open < close[1])
+// Bullish Engulfing: verde care înghite roșul precedent, după minim 3 bearish → BUY
+is_bull_engulf = (close > open) and
+                 (close[1] < open[1]) and (close > open[1]) and (open < close[1]) and
+                 (close[2] < open[2]) and (close[3] < open[3])
 
-// Bearish Engulfing: roșu care înghite verde precedent → SELL
-is_bear_engulf = (close < open) and (close[1] > open[1]) and (close < open[1]) and (open > close[1])
+// Bearish Engulfing: roșu care înghite verdele precedent, după minim 3 bullish → SELL
+is_bear_engulf = (close < open) and
+                 (close[1] > open[1]) and (close < open[1]) and (open > close[1]) and
+                 (close[2] > open[2]) and (close[3] > open[3])
 
 // ─── RETEST ───────────────────────────────────────────────────────────────────
 in_bull_retest = bull_break_active and (low <= daily_high) and (close >= daily_high)
@@ -58,21 +70,23 @@ bull_signal = in_bull_retest and (is_hammer or is_bull_engulf)
 bear_signal = in_bear_retest and (is_shooting_star or is_bear_engulf)
 
 // ─── EXECUȚIE cu SL sub/peste lumânarea de semnal, TP la RR 1:3 ───────────────────
-if bull_signal and not na(ny_session)
+if bull_signal and not na(ny_session) and not traded_today
     sl_price  = low
     real_risk = close - sl_price
     tp_price  = close + real_risk * 3
     strategy.entry("BUY", strategy.long)
     strategy.exit("BUY Exit", "BUY", stop=sl_price, limit=tp_price)
     bull_break_active := false
+    traded_today      := true
 
-if bear_signal and not na(ny_session)
+if bear_signal and not na(ny_session) and not traded_today
     sl_price  = high
     real_risk = sl_price - close
     tp_price  = close - real_risk * 3
     strategy.entry("SELL", strategy.short)
     strategy.exit("SELL Exit", "SELL", stop=sl_price, limit=tp_price)
     bear_break_active := false
+    traded_today      := true
 
 // ─── VIZUALIZARE ──────────────────────────────────────────────────────────────
 plotshape(bull_signal, "BUY Signal",  shape.labelup,   location.belowbar, color.green, text="B&B BUY",  size=size.small)
