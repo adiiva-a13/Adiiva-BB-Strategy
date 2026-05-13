@@ -7,7 +7,7 @@ if timeframe.period != "5"
 
 // ─── INPUTS ───────────────────────────────────────────────────────────────────
 atr_mult = input.float(1.5, "SL ATR Multiplier", minval=0.1)
-tp_mult  = input.float(3.0, "TP ATR Multiplier",  minval=0.1)
+tp_mult  = input.float(4.5, "TP ATR Multiplier",  minval=0.1)
 
 // ─── SESIUNEA NY (ora României UTC+3: 16:30 - 19:00, maxim 2.5h) ─────────────
 ny_session = time(timeframe.period, "1630-1900:23456", "Europe/Bucharest")
@@ -20,8 +20,6 @@ plot(daily_high, "Daily HIGH", color=color.blue,  linewidth=1, style=plot.style_
 plot(daily_low,  "Daily LOW",  color=color.red,   linewidth=1, style=plot.style_line)
 
 // ─── M15 BREAK DETECTION (filtrat la sesiunea NY) ─────────────────────────────
-// Break valid doar dacă lumânarea M15 se închide în fereastra sesiunii NY.
-// Fără filtru, break-uri din alte ore ale zilei ar putea activa semnale.
 m15_close      = request.security(syminfo.tickerid, "15", close[1], lookahead=barmerge.lookahead_on)
 m15_close_prev = request.security(syminfo.tickerid, "15", close[2], lookahead=barmerge.lookahead_on)
 
