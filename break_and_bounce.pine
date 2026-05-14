@@ -63,9 +63,10 @@ is_bear_engulf = (close < open) and
                  (close[1] > open[1]) and (close < open[1]) and (open > close[1]) and
                  bullish_trend
 
-// ─── RETEST ───────────────────────────────────────────────────────────────────
-in_bull_retest = bull_break_active and (low <= daily_high) and (close >= daily_high)
-in_bear_retest = bear_break_active and (high >= daily_low)  and (close <= daily_low)
+// ─── RETEST: lumânarea atinge nivelul cu low/high ───────────────────────────────
+// Directia bullish/bearish e confirmata de pattern, nu de close vs nivel
+in_bull_retest = bull_break_active and (low <= daily_high)
+in_bear_retest = bear_break_active and (high >= daily_low)
 
 // ─── ENTRY SIGNALS ────────────────────────────────────────────────────────────
 bull_signal = in_bull_retest and (is_hammer or is_bull_engulf)
