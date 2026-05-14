@@ -38,20 +38,19 @@ if bear_break
     bear_break_active := true
     bull_break_active := false
 
-// ─── TREND PE ULTIMELE 3 BARE (lower highs + lower lows / higher highs + higher lows)
-// Mai robust decât 3 lumânări colorate consecutiv — detectează structura vizuală reală
-bearish_trend = high[1] < high[2] and high[2] < high[3] and low[1] < low[2] and low[2] < low[3]
-bullish_trend = high[1] > high[2] and high[2] > high[3] and low[1] > low[2] and low[2] > low[3]
+// ─── TREND: closes descrescatoare/crescatoare pe ultimele 3 bare ───────────────────
+bearish_trend = close[1] < close[2] and close[2] < close[3]
+bullish_trend = close[1] > close[2] and close[2] > close[3]
 
 // ─── CANDLESTICK PATTERNS (M5) ────────────────────────────────────────────────
 body       = math.abs(close - open)
 upper_wick = high - math.max(close, open)
 lower_wick = math.min(close, open) - low
 
-// Hammer: fitil jos lung, corp mic sus, precedat de trend bearish (lower highs + lower lows)
+// Hammer: fitil jos lung, corp mic sus, precedat de trend bearish
 is_hammer = (lower_wick >= body * 2) and (upper_wick <= body * 0.5) and bearish_trend
 
-// Shooting Star: fitil sus lung, corp mic jos, precedat de trend bullish (higher highs + higher lows)
+// Shooting Star: fitil sus lung, corp mic jos, precedat de trend bullish
 is_shooting_star = (upper_wick >= body * 2) and (lower_wick <= body * 0.5) and bullish_trend
 
 // Bullish Engulfing: verde care înghite roșul precedent, precedat de trend bearish
