@@ -1,0 +1,306 @@
+//@version=5
+strategy("Adiiva PVP Strategy", overlay=true, max_bars_back=1000,
+         process_orders_on_close=true,
+         default_qty_type=strategy.percent_of_equity, default_qty_value=10,
+         commission_type=strategy.commission.percent, commission_value=0.05)
+
+// ══════════════════════════════════════════════════════════════════════════════
+// INPUTS
+// ══════════════════════════════════════════════════════════════════════════════
+i_row_size = input.float(500.0, "Row Size",     minval=1,             group="Volume Profile (PVP)")
+i_va_pct   = input.float(68.0,  "Value Area %", minval=1, maxval=100, group="Volume Profile (PVP)") / 100.0
+i_rr       = input.float(1.5,   "RR Ratio",     minval=0.1, step=0.1, group="Strategy")
+
+i_col_sess = input.color(color.new(color.blue,   88), "Trading Session BG",  group="Visual")
+i_col_vah  = input.color(color.new(color.lime,    0), "VAH",                 group="Visual")
+i_col_val  = input.color(color.new(color.red,     0), "VAL",                 group="Visual")
+i_col_poc  = input.color(color.new(color.orange,  0), "POC",                 group="Visual")
+i_col_vwap = input.color(color.new(color.purple,  0), "VWAP",                group="Visual")
+i_col_dhl  = input.color(color.new(color.blue,    0), "Day H/L",             group="Visual")
+i_col_nyhl = input.color(color.new(color.orange,  0), "NY Day H/L",          group="Visual")
+i_col_4hhl = input.color(color.new(color.teal,    0), "NY 4H Candle H/L",    group="Visual")
+
+TZ = "Europe/Bucharest"
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SESSION FLAGS
+// ══════════════════════════════════════════════════════════════════════════════
+// PVP  : 12:00-16:00 RO  — calcul Volume Profile + VWAP
+// TRADE: 16:00-22:00 RO  — sesiune activa, background colorat
+// ENTRY: 16:00-19:00 RO  — fereastra intrare trades
+// NY4H : 16:30-20:30 RO  — prima lumanare 4H NY (09:30-13:30 NY)
+// NYDAY: 16:30-23:00 RO  — ziua NY (09:30-16:00 NY)
+is_pvp   = not na(time(timeframe.period, "1200-1600", TZ))
+is_trade = not na(time(timeframe.period, "1600-2200", TZ))
+is_entry = not na(time(timeframe.period, "1600-1900", TZ))
+is_ny4h  = not na(time(timeframe.period, "1630-2030", TZ))
+is_nyday = not na(time(timeframe.period, "1630-2300", TZ))
+
+pvp_started   = is_pvp   and not is_pvp[1]
+pvp_ended     = not is_pvp and is_pvp[1]
+trade_ended   = not is_trade and is_trade[1]
+ny4h_started  = is_ny4h  and not is_ny4h[1]
+nyday_started = is_nyday and not is_nyday[1]
+
+// ══════════════════════════════════════════════════════════════════════════════
+// VOLUME PROFILE — sesiunea PVP 12:00-16:00 RO
+// Retine bare din sesiune, calculeaza la final: VAH, VAL, POC, VWAP
+// ══════════════════════════════════════════════════════════════════════════════
+var float[] _bh      = array.new_float(0)
+var float[] _bl      = array.new_float(0)
+var float[] _bv      = array.new_float(0)
+var float   vah      = na
+var float   val_l    = na
+var float   poc_     = na
+var float   pvp_vwap = na
+var float   _wpsum   = 0.0
+var float   _vsum    = 0.0
+
+if pvp_started
+    array.clear(_bh), array.clear(_bl), array.clear(_bv)
+    _wpsum := 0.0
+    _vsum  := 0.0
+
+if is_pvp
+    array.push(_bh, high)
+    array.push(_bl, low)
+    array.push(_bv, volume)
+    _wpsum += (high + low + close) / 3.0 * volume
+    _vsum  += volume
+
+if pvp_ended and _vsum > 0.0
+    pvp_vwap := _wpsum / _vsum
+    n    = array.size(_bh)
+    s_hi = array.max(_bh)
+    s_lo = array.min(_bl)
+    rng  = s_hi - s_lo
+    nr   = math.max(1, int(math.ceil(rng / i_row_size)))
+    rv   = array.new_float(nr, 0.0)
+
+    for i = 0 to n - 1
+        bh_ = array.get(_bh, i)
+        bl_ = array.get(_bl, i)
+        bv_ = array.get(_bv, i)
+        ri0 = int(math.max(0.0,         math.floor((bl_ - s_lo) / i_row_size)))
+        ri1 = int(math.min(float(nr-1), math.floor((bh_ - s_lo) / i_row_size)))
+        sp  = ri1 - ri0 + 1
+        if sp > 0
+            vpr = bv_ / float(sp)
+            for r = ri0 to ri1
+                array.set(rv, r, array.get(rv, r) + vpr)
+
+    // POC — randul cu cel mai mare volum
+    poc_idx = 0
+    maxv    = 0.0
+    for r = 0 to nr - 1
+        v = array.get(rv, r)
+        if v > maxv
+            maxv    := v
+            poc_idx := r
+    poc_ := s_lo + (float(poc_idx) + 0.5) * i_row_size
+
+    // Value Area — extinde de la POC pana la 68% din volum total
+    totv = array.sum(rv)
+    tgtv = totv * i_va_pct
+    accv = maxv
+    lo_i = poc_idx
+    hi_i = poc_idx
+    while accv < tgtv
+        cdn = lo_i > 0
+        cup = hi_i < nr - 1
+        if not cdn and not cup
+            break
+        if cdn and cup
+            dv = array.get(rv, lo_i - 1)
+            uv = array.get(rv, hi_i + 1)
+            if dv >= uv
+                lo_i -= 1
+                accv += dv
+            else
+                hi_i += 1
+                accv += uv
+        else if cdn
+            lo_i -= 1
+            accv += array.get(rv, lo_i)
+        else
+            hi_i += 1
+            accv += array.get(rv, hi_i)
+
+    val_l := s_lo + float(lo_i) * i_row_size
+    vah   := s_lo + float(hi_i + 1) * i_row_size
+
+// VWAP live in timpul sesiunii PVP (inainte de a fi calculat final)
+running_vwap = _vsum > 0.0 ? _wpsum / _vsum : na
+
+// ══════════════════════════════════════════════════════════════════════════════
+// HIGH / LOW LEVELS
+// ══════════════════════════════════════════════════════════════════════════════
+var float day_h    = na
+var float day_l    = na
+var float ny_day_h = na
+var float ny_day_l = na
+var float ny4h_h   = na
+var float ny4h_l   = na
+
+new_day = dayofmonth != dayofmonth[1]
+
+// Day H/L — zi calendaristica
+if new_day or bar_index == 0
+    day_h := high
+    day_l := low
+day_h := math.max(day_h, high)
+day_l := math.min(day_l, low)
+
+// NY Day H/L — de la 16:30 RO (09:30 NY)
+if nyday_started
+    ny_day_h := high
+    ny_day_l := low
+if is_nyday
+    ny_day_h := math.max(ny_day_h, high)
+    ny_day_l := math.min(ny_day_l, low)
+
+// Prima lumanare 4H NY — 16:30-20:30 RO (09:30-13:30 NY)
+if ny4h_started
+    ny4h_h := high
+    ny4h_l := low
+if is_ny4h
+    ny4h_h := math.max(ny4h_h, high)
+    ny4h_l := math.min(ny4h_l, low)
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MSS DETECTION
+// ══════════════════════════════════════════════════════════════════════════════
+// Swing high valid  : format inainte de minim 2 lumanari BEARISH consecutive
+// Swing low valid   : format inainte de minim 2 lumanari BULLISH consecutive
+//
+// La detectia a 2 bearish consecutive (bar[0] + bar[1] bearish):
+//   swing high candidate = max(high[2], high[3])  — barul de inainte de secventa
+// La detectia a 2 bullish consecutive:
+//   swing low candidate  = min(low[2],  low[3])
+//
+// Bullish MSS : close sparge in sus tracked_sh
+// Bearish MSS : close sparge in jos tracked_sl
+//
+// SL pentru LONG  = sub swing LOW-ul care a creat MSS-ul bullish (tracked_sl)
+// SL pentru SHORT = deasupra swing HIGH-ului care a creat MSS-ul bearish (tracked_sh)
+
+bear_seq = (close < open) and (close[1] < open[1])
+bull_seq = (close > open) and (close[1] > open[1])
+
+var float tracked_sh = na
+var float tracked_sl = na
+
+if bear_seq
+    tracked_sh := math.max(high[2], high[3])
+
+if bull_seq
+    tracked_sl := math.min(low[2], low[3])
+
+bull_mss = not na(tracked_sh) and close > tracked_sh and close[1] <= tracked_sh
+bear_mss = not na(tracked_sl) and close < tracked_sl and close[1] >= tracked_sl
+
+// Capteaza nivelurile SL inainte de reset
+// bull_mss_sl = swing low de la care a pornit miscarea bullish (SL pentru LONG)
+// bear_mss_sl = swing high de la care a pornit caderea bearish (SL pentru SHORT)
+bull_mss_sl = tracked_sl
+bear_mss_sl = tracked_sh
+
+if bull_mss
+    tracked_sh := na
+if bear_mss
+    tracked_sl := na
+
+// ══════════════════════════════════════════════════════════════════════════════
+// STRATEGY LOGIC
+// ══════════════════════════════════════════════════════════════════════════════
+// Reguli:
+//   - se tranzactioneaza doar 16:00-19:00 RO
+//   - conditie LONG  : pret > VAH SI pret > VWAP → primul MSS bullish
+//   - conditie SHORT : pret < VAL SI pret < VWAP → primul MSS bearish
+//   - SL: sub low-ul care a creat MSS bullish / deasupra high-ului care a creat MSS bearish
+//   - TP: SL * RR (default 1.5)
+//   - maxim 2 trades/zi; trade 2 permis DOAR daca trade 1 a inchis pe SL
+//   - nu se intra in trade 2 daca trade 1 e inca activ
+var int  trades_today = 0
+var bool last_was_sl  = false
+
+// Reset la inceputul fiecarei zile de trading (start sesiune PVP)
+if pvp_started
+    trades_today := 0
+    last_was_sl  := false
+
+// Detecteaza daca ultimul trade inchis a fost pe SL (pierdere)
+if strategy.closedtrades > strategy.closedtrades[1]
+    last_was_sl := strategy.closedtrades.profit(strategy.closedtrades - 1) < 0.0
+
+can_enter = is_entry and strategy.opentrades == 0 and trades_today < 2 and
+            (trades_today == 0 or (trades_today == 1 and last_was_sl))
+
+long_ok  = can_enter and not na(vah)   and not na(pvp_vwap) and
+           close > vah   and close > pvp_vwap and bull_mss
+
+short_ok = can_enter and not na(val_l) and not na(pvp_vwap) and
+           close < val_l and close < pvp_vwap and bear_mss
+
+if long_ok
+    // SL sub swing low-ul care a creat MSS bullish
+    sl_price = na(bull_mss_sl) ? math.min(low[1], low[2]) : bull_mss_sl
+    sl_dist  = math.max(close - sl_price, syminfo.mintick * 10)
+    strategy.entry("LONG", strategy.long)
+    strategy.exit("LONG_X", "LONG",
+         stop  = sl_price,
+         limit = close + sl_dist * i_rr)
+    trades_today += 1
+    tracked_sl   := na
+
+if short_ok
+    // SL deasupra swing high-ului care a creat MSS bearish
+    sl_price = na(bear_mss_sl) ? math.max(high[1], high[2]) : bear_mss_sl
+    sl_dist  = math.max(sl_price - close, syminfo.mintick * 10)
+    strategy.entry("SHORT", strategy.short)
+    strategy.exit("SHORT_X", "SHORT",
+         stop  = sl_price,
+         limit = close - sl_dist * i_rr)
+    trades_today += 1
+    tracked_sh   := na
+
+// Inchide toate pozitiile la 22:00 RO
+if trade_ended
+    strategy.close_all("EOD")
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PLOTS
+// ══════════════════════════════════════════════════════════════════════════════
+// Fundal colorat sesiune trading 16:00-22:00
+bgcolor(is_trade ? i_col_sess : na, title="Sesiune Trading")
+
+// VWAP live in PVP, apoi valoarea finala in sesiunea de trading
+plot(is_pvp   ? running_vwap : na, "VWAP (PVP live)", color=color.new(i_col_vwap, 50), linewidth=1)
+plot(is_trade ? pvp_vwap     : na, "VWAP PVP",        color=i_col_vwap,                linewidth=2)
+
+// VAH / VAL / POC — vizibile in sesiunea de trading
+plot(is_trade ? vah   : na, "VAH", color=i_col_vah, linewidth=2)
+plot(is_trade ? val_l : na, "VAL", color=i_col_val, linewidth=2)
+plot(is_trade ? poc_  : na, "POC", color=i_col_poc, linewidth=1, style=plot.style_cross)
+
+// Day High / Low
+plot(day_h, "Day High", color=i_col_dhl, linewidth=1)
+plot(day_l, "Day Low",  color=i_col_dhl, linewidth=1)
+
+// NY Day High / Low (16:30-23:00 RO)
+plot(ny_day_h, "NY Day High", color=i_col_nyhl, linewidth=1, style=plot.style_linebr)
+plot(ny_day_l, "NY Day Low",  color=i_col_nyhl, linewidth=1, style=plot.style_linebr)
+
+// Prima lumanare 4H NY High / Low (16:30-20:30 RO)
+plot(ny4h_h, "NY 4H High", color=i_col_4hhl, linewidth=1, style=plot.style_stepline)
+plot(ny4h_l, "NY 4H Low",  color=i_col_4hhl, linewidth=1, style=plot.style_stepline)
+
+// MSS signals
+plotshape(bull_mss,  "MSS Bullish",  shape.triangleup,   location.belowbar, color.lime,    size=size.tiny,   text="MSS↑")
+plotshape(bear_mss,  "MSS Bearish",  shape.triangledown, location.abovebar, color.fuchsia, size=size.tiny,   text="MSS↓")
+plotshape(long_ok,   "LONG Signal",  shape.labelup,      location.belowbar, color.green,   size=size.normal, text="LONG",  textcolor=color.white)
+plotshape(short_ok,  "SHORT Signal", shape.labeldown,    location.abovebar, color.red,     size=size.normal, text="SHORT", textcolor=color.white)
+
+// Alerte
+alertcondition(long_ok,  "LONG",  "Adiiva: LONG — deasupra VAH & VWAP | Bullish MSS")
+alertcondition(short_ok, "SHORT", "Adiiva: SHORT — sub VAL & VWAP | Bearish MSS")
