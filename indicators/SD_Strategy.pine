@@ -10,9 +10,9 @@ grpFilter  = "Filters"
 grpSession = "Session Filter"
 grpAlerts  = "Alerts"
 
-swingLen         = input.int(10,    "Swing Lookback",                       group=grpZones,   minval=3, maxval=50)
+swingLen         = input.int(15,    "Swing Lookback",                       group=grpZones,   minval=3, maxval=50)
 zoneExtend       = input.int(40,    "Zone Extension (bars)",                group=grpZones,   minval=10, maxval=200)
-impulseMinPct    = input.float(0.3, "Min Impulse % for OB",                group=grpZones,   minval=0.1, maxval=5.0, step=0.1)
+impulseMinPct    = input.float(0.8, "Min Impulse % for OB",                group=grpZones,   minval=0.1, maxval=5.0, step=0.1)
 showMitigated    = input.bool(false,"Show Mitigated Zones",                group=grpZones)
 showBOS          = input.bool(true, "Show BOS Lines",                      group=grpBOS)
 bosConfirm       = input.int(2,     "BOS Confirmations needed",            group=grpBOS,     minval=1, maxval=3)
@@ -105,17 +105,19 @@ if impulseDn
             break
 
 // ─── ZONE ARRAYS
-var float[] dTops   = array.new_float()
-var float[] dBots   = array.new_float()
-var int[]   dBars   = array.new_int()
-var bool[]  dActive = array.new_bool()
-var box[]   dBoxes  = array.new_box()
+var float[] dTops    = array.new_float()
+var float[] dBots    = array.new_float()
+var int[]   dBars    = array.new_int()
+var bool[]  dActive  = array.new_bool()
+var bool[]  dTouched = array.new_bool()   // true = price already entered zone once
+var box[]   dBoxes   = array.new_box()
 
-var float[] sTops   = array.new_float()
-var float[] sBots   = array.new_float()
-var int[]   sBars   = array.new_int()
-var bool[]  sActive = array.new_bool()
-var box[]   sBoxes  = array.new_box()
+var float[] sTops    = array.new_float()
+var float[] sBots    = array.new_float()
+var int[]   sBars    = array.new_int()
+var bool[]  sActive  = array.new_bool()
+var bool[]  sTouched = array.new_bool()   // true = price already entered zone once
+var box[]   sBoxes   = array.new_box()
 
 // Safe last-bar helpers
 dSize    = array.size(dBars)
@@ -127,35 +129,47 @@ newDemand = not na(demandTop) and not na(demandBar) and (na(dLastBar) or dLastBa
 newSupply = not na(supplyTop) and not na(supplyBar) and (na(sLastBar) or sLastBar != supplyBar)
 
 if newDemand
-    array.push(dTops,   demandTop)
-    array.push(dBots,   demandBot)
-    array.push(dBars,   demandBar)
-    array.push(dActive, true)
+    array.push(dTops,    demandTop)
+    array.push(dBots,    demandBot)
+    array.push(dBars,    demandBar)
+    array.push(dActive,  true)
+    array.push(dTouched, false)
     b = box.new(demandBar, demandTop, bar_index+zoneExtend, demandBot, border_color=color.new(#26a69a,50), bgcolor=colDemand, border_width=1)
     array.push(dBoxes, b)
 
 if newSupply
-    array.push(sTops,   supplyTop)
-    array.push(sBots,   supplyBot)
-    array.push(sBars,   supplyBar)
-    array.push(sActive, true)
+    array.push(sTops,    supplyTop)
+    array.push(sBots,    supplyBot)
+    array.push(sBars,    supplyBar)
+    array.push(sActive,  true)
+    array.push(sTouched, false)
     b = box.new(supplyBar, supplyTop, bar_index+zoneExtend, supplyBot, border_color=color.new(#e05050,50), bgcolor=colSupply, border_width=1)
     array.push(sBoxes, b)
 
-// Mitigate zones — guard every loop with size > 0
+// ─── MITIGATION
+// Demand: mitigated when price CLOSES below the zone bottom
+// Supply: mitigated when price CLOSES above the zone top
+// A zone is also invalidated (touched) the moment price enters it—
+// so it can only trigger ONE signal, then it’s marked touched and ignored.
 if array.size(dTops) > 0
     for i = 0 to array.size(dTops) - 1
-        if array.get(dActive, i) and close < array.get(dBots, i)
-            array.set(dActive, i, false)
-            if not showMitigated
-                box.delete(array.get(dBoxes, i))
+        if array.get(dActive, i)
+            dTop = array.get(dTops, i)
+            dBot = array.get(dBots, i)
+            // Full mitigation: close below zone bottom
+            if close < array.get(dBots, i)
+                array.set(dActive, i, false)
+                if not showMitigated
+                    box.delete(array.get(dBoxes, i))
 
 if array.size(sTops) > 0
     for i = 0 to array.size(sTops) - 1
-        if array.get(sActive, i) and close > array.get(sTops, i)
-            array.set(sActive, i, false)
-            if not showMitigated
-                box.delete(array.get(sBoxes, i))
+        if array.get(sActive, i)
+            // Full mitigation: close above zone top
+            if close > array.get(sTops, i)
+                array.set(sActive, i, false)
+                if not showMitigated
+                    box.delete(array.get(sBoxes, i))
 
 // ─── INDUCEMENT
 var float[] inducementLevels = array.new_float()
@@ -229,6 +243,10 @@ tpClearForSupply(sTop, sBot) =>
     not blocked
 
 // ─── VALID SETUP DETECTION
+// A zone is valid ONLY if it is:
+//   1. Active (not mitigated)
+//   2. NOT yet touched (nemitigata = pretul nu a intrat niciodata inainte)
+//   3. Price is entering it NOW for the FIRST time
 var bool  validBuy  = false, var bool  validSell = false
 var float buyEntry  = na,    var float buySL     = na, var float buyTP  = na
 var float sellEntry = na,    var float sellSL    = na, var float sellTP = na
@@ -240,10 +258,13 @@ isWeakCandle = candleBodyPct(0) <= weakCandleMaxPct
 
 if array.size(dTops) > 0
     for i = 0 to array.size(dTops) - 1
-        if array.get(dActive, i)
+        if array.get(dActive, i) and not array.get(dTouched, i)
             dTop = array.get(dTops, i)
             dBot = array.get(dBots, i)
-            if low <= dTop and high >= dBot
+            priceInZone = low <= dTop and high >= dBot
+            if priceInZone
+                // Mark as touched immediately — zone can only fire once
+                array.set(dTouched, i, true)
                 okBOS  = not filterInduce    or bullBias
                 okInd  = not filterInduce    or inducementSweptForBuy()
                 okTP   = not filterTPClear   or tpClearForDemand(dTop, dBot)
@@ -256,10 +277,13 @@ if array.size(dTops) > 0
 
 if array.size(sTops) > 0
     for i = 0 to array.size(sTops) - 1
-        if array.get(sActive, i)
+        if array.get(sActive, i) and not array.get(sTouched, i)
             sTop = array.get(sTops, i)
             sBot = array.get(sBots, i)
-            if low <= sTop and high >= sBot
+            priceInZone = low <= sTop and high >= sBot
+            if priceInZone
+                // Mark as touched immediately — zone can only fire once
+                array.set(sTouched, i, true)
                 okBOS  = not filterInduce    or bearBias
                 okInd  = not filterInduce    or inducementSweptForSell()
                 okTP   = not filterTPClear   or tpClearForSupply(sTop, sBot)
@@ -270,7 +294,7 @@ if array.size(sTops) > 0
                     sellSL    := sTop
                     sellTP    := sBot - (sTop - sBot)
 
-// ─── DRAW ENTRY BOXES
+// ─── DRAW ENTRY BOXES (only on signal bar)
 if validBuy
     box.new(bar_index, buyEntry, bar_index+zoneExtend, buySL,    border_color=color.new(#e05050,40), bgcolor=colSL, border_width=1)
     box.new(bar_index, buyTP,    bar_index+zoneExtend, buyEntry,  border_color=color.new(#26a69a,40), bgcolor=colTP, border_width=1)
@@ -305,14 +329,14 @@ if barstate.islast
     activeDemand = 0
     if array.size(dActive) > 0
         for i = 0 to array.size(dActive) - 1
-            if array.get(dActive, i)
+            if array.get(dActive, i) and not array.get(dTouched, i)
                 activeDemand += 1
     table.cell(tbl, 0, 3, "Demand", text_color=color.gray, text_size=size.tiny)
     table.cell(tbl, 1, 3, str.tostring(activeDemand), text_color=#26a69a, text_size=size.tiny)
     activeSupply = 0
     if array.size(sActive) > 0
         for i = 0 to array.size(sActive) - 1
-            if array.get(sActive, i)
+            if array.get(sActive, i) and not array.get(sTouched, i)
                 activeSupply += 1
     table.cell(tbl, 0, 4, "Supply", text_color=color.gray, text_size=size.tiny)
     table.cell(tbl, 1, 4, str.tostring(activeSupply), text_color=#e05050, text_size=size.tiny)
