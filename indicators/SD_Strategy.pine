@@ -3,43 +3,43 @@
 //@version=5
 indicator("Supply & Demand Strategy [SD]", overlay=true, max_boxes_count=100, max_lines_count=200, max_labels_count=200)
 
-// ─── INPUTS ───────────────────────────────────────────────────────────────────
+// ─── INPUTS
 grpZones   = "Zone Settings"
 grpBOS     = "Break of Structure"
 grpFilter  = "Filters"
 grpSession = "Session Filter"
 grpAlerts  = "Alerts"
 
-swingLen         = input.int(10,    "Swing Lookback",                    group=grpZones, minval=3, maxval=50)
-zoneExtend       = input.int(40,    "Zone Extension (bars)",             group=grpZones, minval=10, maxval=200)
-impulseMinPct    = input.float(0.3, "Min Impulse % for OB",             group=grpZones, minval=0.1, maxval=5.0, step=0.1)
-showMitigated    = input.bool(false,"Show Mitigated Zones",             group=grpZones)
-showBOS          = input.bool(true, "Show BOS Lines",                   group=grpBOS)
-bosConfirm       = input.int(2,     "BOS Confirmations needed",         group=grpBOS, minval=1, maxval=3)
-filterTPClear    = input.bool(true, "Filter: TP 1:1 must be clear",     group=grpFilter)
+swingLen         = input.int(10,    "Swing Lookback",                       group=grpZones,   minval=3, maxval=50)
+zoneExtend       = input.int(40,    "Zone Extension (bars)",                group=grpZones,   minval=10, maxval=200)
+impulseMinPct    = input.float(0.3, "Min Impulse % for OB",                group=grpZones,   minval=0.1, maxval=5.0, step=0.1)
+showMitigated    = input.bool(false,"Show Mitigated Zones",                group=grpZones)
+showBOS          = input.bool(true, "Show BOS Lines",                      group=grpBOS)
+bosConfirm       = input.int(2,     "BOS Confirmations needed",            group=grpBOS,     minval=1, maxval=3)
+filterTPClear    = input.bool(true, "Filter: TP 1:1 must be clear",        group=grpFilter)
 filterInduce     = input.bool(true, "Filter: Inducement must be consumed", group=grpFilter)
-filterWeakEntry  = input.bool(true, "Filter: Entry candle must be weak",group=grpFilter)
-weakCandleMaxPct = input.float(0.4, "Max body % for weak candle",       group=grpFilter, minval=0.05, maxval=2.0, step=0.05)
-eqTol            = input.float(0.05,"Inducement tolerance %",           group=grpFilter, minval=0.01, maxval=0.3, step=0.01)
-alertOnBuy       = input.bool(true, "Alert: Valid BUY Setup",           group=grpAlerts)
-alertOnSell      = input.bool(true, "Alert: Valid SELL Setup",          group=grpAlerts)
-sessionMode      = input.string("Both", "Active Session", options=["London", "New York", "Both", "Off"], group=grpSession)
-londonOpen       = input.session("0800-1700", "London Hours (UTC)",     group=grpSession)
-nyOpen           = input.session("1300-2200", "New York Hours (UTC)",   group=grpSession)
+filterWeakEntry  = input.bool(true, "Filter: Entry candle must be weak",   group=grpFilter)
+weakCandleMaxPct = input.float(0.4, "Max body % for weak candle",          group=grpFilter,  minval=0.05, maxval=2.0, step=0.05)
+eqTol            = input.float(0.05,"Inducement tolerance %",              group=grpFilter,  minval=0.01, maxval=0.3, step=0.01)
+alertOnBuy       = input.bool(true, "Alert: Valid BUY Setup",              group=grpAlerts)
+alertOnSell      = input.bool(true, "Alert: Valid SELL Setup",             group=grpAlerts)
+sessionMode      = input.string("Both", "Active Session", options=["London","New York","Both","Off"], group=grpSession)
+londonOpen       = input.session("0800-1700", "London Hours (UTC)",        group=grpSession)
+nyOpen           = input.session("1300-2200", "New York Hours (UTC)",      group=grpSession)
 
-colSupply     = input.color(color.new(#e05050, 80), "Supply Zone",    inline="c")
-colDemand     = input.color(color.new(#26a69a, 80), "Demand Zone",    inline="c")
+colSupply     = input.color(color.new(#e05050, 80), "Supply Zone", inline="c")
+colDemand     = input.color(color.new(#26a69a, 80), "Demand Zone", inline="c")
 colBOS        = input.color(color.new(color.blue, 40), "BOS Line")
 colInducement = input.color(color.orange,            "Inducement ($$$)")
 colSL         = input.color(color.new(#e05050, 70),  "SL Zone")
 colTP         = input.color(color.new(#26a69a, 70),  "TP Zone")
 
-// ─── SESSION ──────────────────────────────────────────────────────────────────
+// ─── SESSION
 inLondon  = time(timeframe.period, londonOpen, "UTC") != 0
 inNY      = time(timeframe.period, nyOpen,     "UTC") != 0
 inSession = sessionMode == "London" ? inLondon : sessionMode == "New York" ? inNY : sessionMode == "Both" ? inLondon or inNY : true
 
-// ─── SWING DETECTION ──────────────────────────────────────────────────────────
+// ─── SWING DETECTION
 swHigh = ta.pivothigh(high, swingLen, swingLen)
 swLow  = ta.pivotlow(low,  swingLen, swingLen)
 
@@ -53,7 +53,7 @@ if not na(swLow)
     sl2 := sl1
     sl1 := swLow
 
-// ─── BOS DETECTION ────────────────────────────────────────────────────────────
+// ─── BOS DETECTION
 var int bullBOSCount = 0
 var int bearBOSCount = 0
 
@@ -64,20 +64,20 @@ if bullBOS
     bullBOSCount := bullBOSCount + 1
     bearBOSCount := 0
     if showBOS
-        line.new(bar_index - 1, sh1, bar_index + zoneExtend, sh1, color=colBOS, style=line.style_dashed, width=1)
-        label.new(bar_index, sh1, "bos", color=color.new(colBOS, 80), textcolor=colBOS, size=size.tiny, style=label.style_label_down)
+        line.new(bar_index-1, sh1, bar_index+zoneExtend, sh1, color=colBOS, style=line.style_dashed, width=1)
+        label.new(bar_index, sh1, "bos", color=color.new(colBOS,80), textcolor=colBOS, size=size.tiny, style=label.style_label_down)
 
 if bearBOS
     bearBOSCount := bearBOSCount + 1
     bullBOSCount := 0
     if showBOS
-        line.new(bar_index - 1, sl1, bar_index + zoneExtend, sl1, color=colBOS, style=line.style_dashed, width=1)
-        label.new(bar_index, sl1, "bos", color=color.new(colBOS, 80), textcolor=colBOS, size=size.tiny, style=label.style_label_up)
+        line.new(bar_index-1, sl1, bar_index+zoneExtend, sl1, color=colBOS, style=line.style_dashed, width=1)
+        label.new(bar_index, sl1, "bos", color=color.new(colBOS,80), textcolor=colBOS, size=size.tiny, style=label.style_label_up)
 
 bullBias = bullBOSCount >= bosConfirm
 bearBias = bearBOSCount >= bosConfirm
 
-// ─── ORDER BLOCK DETECTION ────────────────────────────────────────────────────
+// ─── ORDER BLOCK DETECTION
 candleBodyPct(idx)   => math.abs(close[idx] - open[idx]) / open[idx] * 100
 isBearishCandle(idx) => close[idx] < open[idx]
 isBullishCandle(idx) => close[idx] > open[idx]
@@ -104,7 +104,7 @@ if impulseDn
             supplyBar := bar_index - i
             break
 
-// ─── ZONE STORAGE ─────────────────────────────────────────────────────────────
+// ─── ZONE ARRAYS
 var float[] dTops   = array.new_float()
 var float[] dBots   = array.new_float()
 var int[]   dBars   = array.new_int()
@@ -117,11 +117,11 @@ var int[]   sBars   = array.new_int()
 var bool[]  sActive = array.new_bool()
 var box[]   sBoxes  = array.new_box()
 
-// Safe last-bar check: read last element only when array is non-empty
-dSize     = array.size(dBars)
-dLastBar  = dSize > 0 ? array.get(dBars, dSize - 1) : na
-sSize     = array.size(sBars)
-sLastBar  = sSize > 0 ? array.get(sBars, sSize - 1) : na
+// Safe last-bar helpers
+dSize    = array.size(dBars)
+dLastBar = dSize > 0 ? array.get(dBars, dSize - 1) : na
+sSize    = array.size(sBars)
+sLastBar = sSize > 0 ? array.get(sBars, sSize - 1) : na
 
 newDemand = not na(demandTop) and not na(demandBar) and (na(dLastBar) or dLastBar != demandBar)
 newSupply = not na(supplyTop) and not na(supplyBar) and (na(sLastBar) or sLastBar != supplyBar)
@@ -131,7 +131,7 @@ if newDemand
     array.push(dBots,   demandBot)
     array.push(dBars,   demandBar)
     array.push(dActive, true)
-    b = box.new(demandBar, demandTop, bar_index + zoneExtend, demandBot, border_color=color.new(#26a69a, 50), bgcolor=colDemand, border_width=1)
+    b = box.new(demandBar, demandTop, bar_index+zoneExtend, demandBot, border_color=color.new(#26a69a,50), bgcolor=colDemand, border_width=1)
     array.push(dBoxes, b)
 
 if newSupply
@@ -139,22 +139,25 @@ if newSupply
     array.push(sBots,   supplyBot)
     array.push(sBars,   supplyBar)
     array.push(sActive, true)
-    b = box.new(supplyBar, supplyTop, bar_index + zoneExtend, supplyBot, border_color=color.new(#e05050, 50), bgcolor=colSupply, border_width=1)
+    b = box.new(supplyBar, supplyTop, bar_index+zoneExtend, supplyBot, border_color=color.new(#e05050,50), bgcolor=colSupply, border_width=1)
     array.push(sBoxes, b)
 
-for i = 0 to array.size(dTops) - 1
-    if array.get(dActive, i) and close < array.get(dBots, i)
-        array.set(dActive, i, false)
-        if not showMitigated
-            box.delete(array.get(dBoxes, i))
+// Mitigate zones — guard every loop with size > 0
+if array.size(dTops) > 0
+    for i = 0 to array.size(dTops) - 1
+        if array.get(dActive, i) and close < array.get(dBots, i)
+            array.set(dActive, i, false)
+            if not showMitigated
+                box.delete(array.get(dBoxes, i))
 
-for i = 0 to array.size(sTops) - 1
-    if array.get(sActive, i) and close > array.get(sTops, i)
-        array.set(sActive, i, false)
-        if not showMitigated
-            box.delete(array.get(sBoxes, i))
+if array.size(sTops) > 0
+    for i = 0 to array.size(sTops) - 1
+        if array.get(sActive, i) and close > array.get(sTops, i)
+            array.set(sActive, i, false)
+            if not showMitigated
+                box.delete(array.get(sBoxes, i))
 
-// ─── INDUCEMENT (Equal Highs / Lows) ─────────────────────────────────────────
+// ─── INDUCEMENT
 var float[] inducementLevels = array.new_float()
 var bool[]  inducementSwept  = array.new_bool()
 var bool[]  inducementIsBull = array.new_bool()
@@ -167,20 +170,19 @@ if isEqHigh
     array.push(inducementLevels, lvl)
     array.push(inducementSwept,  false)
     array.push(inducementIsBull, true)
-    line.new(bar_index - swingLen * 2, lvl, bar_index + zoneExtend / 2, lvl, color=colInducement, style=line.style_dotted, width=1)
-    label.new(bar_index - swingLen, lvl, "$$$", color=color.new(colInducement, 75), textcolor=colInducement, size=size.tiny, style=label.style_label_down)
+    line.new(bar_index-swingLen*2, lvl, bar_index+zoneExtend/2, lvl, color=colInducement, style=line.style_dotted, width=1)
+    label.new(bar_index-swingLen, lvl, "$$$", color=color.new(colInducement,75), textcolor=colInducement, size=size.tiny, style=label.style_label_down)
 
 if isEqLow
     lvl = (swLow + sl2) / 2
     array.push(inducementLevels, lvl)
     array.push(inducementSwept,  false)
     array.push(inducementIsBull, false)
-    line.new(bar_index - swingLen * 2, lvl, bar_index + zoneExtend / 2, lvl, color=colInducement, style=line.style_dotted, width=1)
-    label.new(bar_index - swingLen, lvl, "$$$", color=color.new(colInducement, 75), textcolor=colInducement, size=size.tiny, style=label.style_label_up)
+    line.new(bar_index-swingLen*2, lvl, bar_index+zoneExtend/2, lvl, color=colInducement, style=line.style_dotted, width=1)
+    label.new(bar_index-swingLen, lvl, "$$$", color=color.new(colInducement,75), textcolor=colInducement, size=size.tiny, style=label.style_label_up)
 
-indLen = array.size(inducementLevels)
-if indLen > 0
-    for i = 0 to indLen - 1
+if array.size(inducementLevels) > 0
+    for i = 0 to array.size(inducementLevels) - 1
         if not array.get(inducementSwept, i)
             lvl    = array.get(inducementLevels, i)
             isBull = array.get(inducementIsBull, i)
@@ -205,7 +207,7 @@ inducementSweptForSell() =>
                 swept := true
     swept
 
-// ─── TP CLEAR FILTER ──────────────────────────────────────────────────────────
+// ─── TP CLEAR FILTER
 tpClearForDemand(dTop, dBot) =>
     tpLevel = dTop + (dTop - dBot)
     blocked = false
@@ -226,7 +228,7 @@ tpClearForSupply(sTop, sBot) =>
                 blocked := true
     not blocked
 
-// ─── VALID SETUP DETECTION ────────────────────────────────────────────────────
+// ─── VALID SETUP DETECTION
 var bool  validBuy  = false, var bool  validSell = false
 var float buyEntry  = na,    var float buySL     = na, var float buyTP  = na
 var float sellEntry = na,    var float sellSL    = na, var float sellTP = na
@@ -236,9 +238,8 @@ validSell := false
 
 isWeakCandle = candleBodyPct(0) <= weakCandleMaxPct
 
-nDemand = array.size(dTops)
-if nDemand > 0
-    for i = 0 to nDemand - 1
+if array.size(dTops) > 0
+    for i = 0 to array.size(dTops) - 1
         if array.get(dActive, i)
             dTop = array.get(dTops, i)
             dBot = array.get(dBots, i)
@@ -253,9 +254,8 @@ if nDemand > 0
                     buySL    := dBot
                     buyTP    := dTop + (dTop - dBot)
 
-nSupply = array.size(sTops)
-if nSupply > 0
-    for i = 0 to nSupply - 1
+if array.size(sTops) > 0
+    for i = 0 to array.size(sTops) - 1
         if array.get(sActive, i)
             sTop = array.get(sTops, i)
             sBot = array.get(sBots, i)
@@ -270,28 +270,28 @@ if nSupply > 0
                     sellSL    := sTop
                     sellTP    := sBot - (sTop - sBot)
 
-// ─── DRAW ENTRY BOXES ─────────────────────────────────────────────────────────
+// ─── DRAW ENTRY BOXES
 if validBuy
-    box.new(bar_index, buyEntry, bar_index + zoneExtend, buySL,   border_color=color.new(#e05050, 40), bgcolor=colSL, border_width=1)
-    box.new(bar_index, buyTP,    bar_index + zoneExtend, buyEntry, border_color=color.new(#26a69a, 40), bgcolor=colTP, border_width=1)
-    label.new(bar_index, buySL, "BUY\nRR 1:1", color=color.new(color.green, 60), textcolor=color.white, size=size.small, style=label.style_label_up)
+    box.new(bar_index, buyEntry, bar_index+zoneExtend, buySL,    border_color=color.new(#e05050,40), bgcolor=colSL, border_width=1)
+    box.new(bar_index, buyTP,    bar_index+zoneExtend, buyEntry,  border_color=color.new(#26a69a,40), bgcolor=colTP, border_width=1)
+    label.new(bar_index, buySL, "BUY\nRR 1:1", color=color.new(color.green,60), textcolor=color.white, size=size.small, style=label.style_label_up)
 
 if validSell
-    box.new(bar_index, sellSL,    bar_index + zoneExtend, sellEntry, border_color=color.new(#e05050, 40), bgcolor=colSL, border_width=1)
-    box.new(bar_index, sellEntry, bar_index + zoneExtend, sellTP,    border_color=color.new(#26a69a, 40), bgcolor=colTP, border_width=1)
-    label.new(bar_index, sellSL, "SELL\nRR 1:1", color=color.new(color.red, 60), textcolor=color.white, size=size.small, style=label.style_label_down)
+    box.new(bar_index, sellSL,    bar_index+zoneExtend, sellEntry, border_color=color.new(#e05050,40), bgcolor=colSL, border_width=1)
+    box.new(bar_index, sellEntry, bar_index+zoneExtend, sellTP,    border_color=color.new(#26a69a,40), bgcolor=colTP, border_width=1)
+    label.new(bar_index, sellSL, "SELL\nRR 1:1", color=color.new(color.red,60), textcolor=color.white, size=size.small, style=label.style_label_down)
 
-// ─── SIGNALS & SESSION HIGHLIGHT ──────────────────────────────────────────────
+// ─── SIGNALS & SESSION HIGHLIGHT
 bgcolor(not inSession ? color.new(color.gray, 93) : na, title="Out of Session")
 plotshape(validBuy  and alertOnBuy  and inSession, "BUY Signal",  shape.triangleup,   location.belowbar, color.green, size=size.normal)
 plotshape(validSell and alertOnSell and inSession, "SELL Signal", shape.triangledown, location.abovebar, color.red,   size=size.normal)
 
-// ─── ALERTS (webhook JSON → Pick My Trade / TTA) ──────────────────────────────
+// ─── ALERTS
 alertcondition(validBuy  and alertOnBuy  and inSession, title="SD BUY Setup",  message='{"action":"buy","symbol":"{{ticker}}","timeframe":"{{interval}}","entry":"{{close}}","comment":"SD Valid BUY - RR 1:1"}')
 alertcondition(validSell and alertOnSell and inSession, title="SD SELL Setup", message='{"action":"sell","symbol":"{{ticker}}","timeframe":"{{interval}}","entry":"{{close}}","comment":"SD Valid SELL - RR 1:1"}')
 
-// ─── INFO TABLE ───────────────────────────────────────────────────────────────
-var table tbl = table.new(position.top_right, 2, 6, bgcolor=color.new(color.black, 80), border_width=1)
+// ─── INFO TABLE
+var table tbl = table.new(position.top_right, 2, 6, bgcolor=color.new(color.black,80), border_width=1)
 
 if barstate.islast
     table.cell(tbl, 0, 0, "SD Strategy", text_color=color.white, text_size=size.small)
@@ -303,15 +303,17 @@ if barstate.islast
     table.cell(tbl, 0, 2, "BOS Count", text_color=color.gray, text_size=size.tiny)
     table.cell(tbl, 1, 2, str.tostring(math.max(bullBOSCount, bearBOSCount)), text_color=color.white, text_size=size.tiny)
     activeDemand = 0
-    for i = 0 to array.size(dActive) - 1
-        if array.get(dActive, i)
-            activeDemand += 1
+    if array.size(dActive) > 0
+        for i = 0 to array.size(dActive) - 1
+            if array.get(dActive, i)
+                activeDemand += 1
     table.cell(tbl, 0, 3, "Demand", text_color=color.gray, text_size=size.tiny)
     table.cell(tbl, 1, 3, str.tostring(activeDemand), text_color=#26a69a, text_size=size.tiny)
     activeSupply = 0
-    for i = 0 to array.size(sActive) - 1
-        if array.get(sActive, i)
-            activeSupply += 1
+    if array.size(sActive) > 0
+        for i = 0 to array.size(sActive) - 1
+            if array.get(sActive, i)
+                activeSupply += 1
     table.cell(tbl, 0, 4, "Supply", text_color=color.gray, text_size=size.tiny)
     table.cell(tbl, 1, 4, str.tostring(activeSupply), text_color=#e05050, text_size=size.tiny)
     sigText  = validBuy ? "BUY ▲" : validSell ? "SELL ▼" : "—"
