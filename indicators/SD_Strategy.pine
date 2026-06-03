@@ -49,13 +49,17 @@ swLow  = ta.pivotlow(low,  swingLen, swingLen)
 
 var float sh1 = na, var float sh2 = na
 var float sl1 = na, var float sl2 = na
+var int   sh1Bar = na
+var int   sl1Bar = na
 
 if not na(swHigh)
     sh2 := sh1
     sh1 := swHigh
+    sh1Bar := bar_index - swingLen
 if not na(swLow)
     sl2 := sl1
     sl1 := swLow
+    sl1Bar := bar_index - swingLen
 
 // ─── BOS DETECTION
 var int bullBOSCount = 0
@@ -132,11 +136,13 @@ var bool[]  sActive  = array.new_bool()
 var bool[]  sTouched = array.new_bool()
 var box[]   sBoxes   = array.new_box()
 
-if bullBOS
+if bullBOS and not na(sl1Bar)
     obTop  = float(na)
     obBot  = float(na)
     obTime = int(na)
-    for i = 1 to obLookback
+    barsToSL = bar_index - sl1Bar
+    searchEnd = math.min(barsToSL + obLookback, bar_index - 1)
+    for i = barsToSL to searchEnd
         if isBearishCandle(i)
             obTop  := high[i]
             obBot  := low[i]
@@ -154,11 +160,13 @@ if bullBOS
             b = box.new(obTime, obTop, time + barMs * 500, obBot, xloc=xloc.bar_time, border_color=color.new(#26a69a,50), bgcolor=colDemand, border_width=1)
             array.push(dBoxes, b)
 
-if bearBOS
+if bearBOS and not na(sh1Bar)
     obTop  = float(na)
     obBot  = float(na)
     obTime = int(na)
-    for i = 1 to obLookback
+    barsToSH = bar_index - sh1Bar
+    searchEnd = math.min(barsToSH + obLookback, bar_index - 1)
+    for i = barsToSH to searchEnd
         if isBullishCandle(i)
             obTop  := high[i]
             obBot  := low[i]
