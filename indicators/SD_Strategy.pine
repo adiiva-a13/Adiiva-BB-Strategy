@@ -154,7 +154,7 @@ if bullBOS and not na(sl1BarForBull)
             obBot  := low[i]
             obTime := time[i]
             break
-    if not na(obTop)
+    if not na(obTop) and obBot < close
         dSz = array.size(dTimes)
         dLT = dSz > 0 ? array.get(dTimes, dSz - 1) : na
         if na(dLT) or dLT != obTime
@@ -178,7 +178,7 @@ if bearBOS and not na(sh1BarForBear)
             obBot  := low[i]
             obTime := time[i]
             break
-    if not na(obTop)
+    if not na(obTop) and obTop > close
         sSz = array.size(sTimes)
         sLT = sSz > 0 ? array.get(sTimes, sSz - 1) : na
         if na(sLT) or sLT != obTime
