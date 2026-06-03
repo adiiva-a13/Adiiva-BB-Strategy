@@ -40,6 +40,9 @@ inLondon  = time(timeframe.period, londonOpen, "UTC") != 0
 inNY      = time(timeframe.period, nyOpen,     "UTC") != 0
 inSession = sessionMode == "London" ? inLondon : sessionMode == "New York" ? inNY : sessionMode == "Both" ? inLondon or inNY : true
 
+// ─── BAR DURATION (ms) — used for time-based right edge
+barMs = timeframe.in_seconds() * 1000
+
 // ─── SWING DETECTION
 swHigh = ta.pivothigh(high, swingLen, swingLen)
 swLow  = ta.pivotlow(low,  swingLen, swingLen)
@@ -65,15 +68,15 @@ if bullBOS
     bullBOSCount := bullBOSCount + 1
     bearBOSCount := 0
     if showBOS
-        line.new(bar_index-1, sh1, bar_index+zoneExtend, sh1, color=colBOS, style=line.style_dashed, width=1)
-        label.new(bar_index, sh1, "bos", color=color.new(colBOS,80), textcolor=colBOS, size=size.tiny, style=label.style_label_down)
+        line.new(time[1], sh1, time + barMs * zoneExtend, sh1, xloc=xloc.bar_time, color=colBOS, style=line.style_dashed, width=1)
+        label.new(time, sh1, "bos", xloc=xloc.bar_time, color=color.new(colBOS,80), textcolor=colBOS, size=size.tiny, style=label.style_label_down)
 
 if bearBOS
     bearBOSCount := bearBOSCount + 1
     bullBOSCount := 0
     if showBOS
-        line.new(bar_index-1, sl1, bar_index+zoneExtend, sl1, color=colBOS, style=line.style_dashed, width=1)
-        label.new(bar_index, sl1, "bos", color=color.new(colBOS,80), textcolor=colBOS, size=size.tiny, style=label.style_label_up)
+        line.new(time[1], sl1, time + barMs * zoneExtend, sl1, xloc=xloc.bar_time, color=colBOS, style=line.style_dashed, width=1)
+        label.new(time, sl1, "bos", xloc=xloc.bar_time, color=color.new(colBOS,80), textcolor=colBOS, size=size.tiny, style=label.style_label_up)
 
 bullBias = bullBOSCount >= bosConfirm
 bearBias = bearBOSCount >= bosConfirm
@@ -91,16 +94,16 @@ if isEqHigh
     array.push(liqLevels, lvl)
     array.push(liqSwept,  false)
     array.push(liqIsBull, true)
-    line.new(bar_index-swingLen*2, lvl, bar_index+zoneExtend/2, lvl, color=colInducement, style=line.style_dotted, width=1)
-    label.new(bar_index-swingLen, lvl, "$$$", color=color.new(colInducement,75), textcolor=colInducement, size=size.tiny, style=label.style_label_down)
+    line.new(time[swingLen*2], lvl, time + barMs * (zoneExtend / 2), lvl, xloc=xloc.bar_time, color=colInducement, style=line.style_dotted, width=1)
+    label.new(time[swingLen], lvl, "$$$", xloc=xloc.bar_time, color=color.new(colInducement,75), textcolor=colInducement, size=size.tiny, style=label.style_label_down)
 
 if isEqLow
     lvl = (swLow + sl2) / 2
     array.push(liqLevels, lvl)
     array.push(liqSwept,  false)
     array.push(liqIsBull, false)
-    line.new(bar_index-swingLen*2, lvl, bar_index+zoneExtend/2, lvl, color=colInducement, style=line.style_dotted, width=1)
-    label.new(bar_index-swingLen, lvl, "$$$", color=color.new(colInducement,75), textcolor=colInducement, size=size.tiny, style=label.style_label_up)
+    line.new(time[swingLen*2], lvl, time + barMs * (zoneExtend / 2), lvl, xloc=xloc.bar_time, color=colInducement, style=line.style_dotted, width=1)
+    label.new(time[swingLen], lvl, "$$$", xloc=xloc.bar_time, color=color.new(colInducement,75), textcolor=colInducement, size=size.tiny, style=label.style_label_up)
 
 if array.size(liqLevels) > 0
     for i = 0 to array.size(liqLevels) - 1
@@ -117,72 +120,72 @@ isBullishCandle(idx) => close[idx] > open[idx]
 
 var float[] dTops    = array.new_float()
 var float[] dBots    = array.new_float()
-var int[]   dBars    = array.new_int()
+var int[]   dTimes   = array.new_int()
 var bool[]  dActive  = array.new_bool()
 var bool[]  dTouched = array.new_bool()
 var box[]   dBoxes   = array.new_box()
 
 var float[] sTops    = array.new_float()
 var float[] sBots    = array.new_float()
-var int[]   sBars    = array.new_int()
+var int[]   sTimes   = array.new_int()
 var bool[]  sActive  = array.new_bool()
 var bool[]  sTouched = array.new_bool()
 var box[]   sBoxes   = array.new_box()
 
 if bullBOS
-    obTop = float(na)
-    obBot = float(na)
-    obBar = int(na)
+    obTop  = float(na)
+    obBot  = float(na)
+    obTime = int(na)
     for i = 1 to obLookback
         if isBearishCandle(i)
-            obTop := high[i]
-            obBot := low[i]
-            obBar := bar_index - i
+            obTop  := high[i]
+            obBot  := low[i]
+            obTime := time[i]
             break
     if not na(obTop)
-        dSz = array.size(dBars)
-        dLB = dSz > 0 ? array.get(dBars, dSz - 1) : na
-        if na(dLB) or dLB != obBar
+        dSz = array.size(dTimes)
+        dLT = dSz > 0 ? array.get(dTimes, dSz - 1) : na
+        if na(dLT) or dLT != obTime
             array.push(dTops,    obTop)
             array.push(dBots,    obBot)
-            array.push(dBars,    obBar)
+            array.push(dTimes,   obTime)
             array.push(dActive,  true)
             array.push(dTouched, false)
-            b = box.new(obBar, obTop, bar_index+500, obBot, border_color=color.new(#26a69a,50), bgcolor=colDemand, border_width=1)
+            b = box.new(obTime, obTop, time + barMs * 500, obBot, xloc=xloc.bar_time, border_color=color.new(#26a69a,50), bgcolor=colDemand, border_width=1)
             array.push(dBoxes, b)
 
 if bearBOS
-    obTop = float(na)
-    obBot = float(na)
-    obBar = int(na)
+    obTop  = float(na)
+    obBot  = float(na)
+    obTime = int(na)
     for i = 1 to obLookback
         if isBullishCandle(i)
-            obTop := high[i]
-            obBot := low[i]
-            obBar := bar_index - i
+            obTop  := high[i]
+            obBot  := low[i]
+            obTime := time[i]
             break
     if not na(obTop)
-        sSz = array.size(sBars)
-        sLB = sSz > 0 ? array.get(sBars, sSz - 1) : na
-        if na(sLB) or sLB != obBar
+        sSz = array.size(sTimes)
+        sLT = sSz > 0 ? array.get(sTimes, sSz - 1) : na
+        if na(sLT) or sLT != obTime
             array.push(sTops,    obTop)
             array.push(sBots,    obBot)
-            array.push(sBars,    obBar)
+            array.push(sTimes,   obTime)
             array.push(sActive,  true)
             array.push(sTouched, false)
-            b = box.new(obBar, obTop, bar_index+500, obBot, border_color=color.new(#e05050,50), bgcolor=colSupply, border_width=1)
+            b = box.new(obTime, obTop, time + barMs * 500, obBot, xloc=xloc.bar_time, border_color=color.new(#e05050,50), bgcolor=colSupply, border_width=1)
             array.push(sBoxes, b)
 
-// ─── EXTEND ACTIVE BOXES every bar so zones stay visible regardless of chart position
+// ─── EXTEND ACTIVE BOXES — time-anchored, persist on any scroll position
 if array.size(dBoxes) > 0
     for i = 0 to array.size(dBoxes) - 1
         if array.get(dActive, i)
-            box.set_right(array.get(dBoxes, i), bar_index + 500)
+            box.set_right(array.get(dBoxes, i), time + barMs * 500)
 
 if array.size(sBoxes) > 0
     for i = 0 to array.size(sBoxes) - 1
         if array.get(sActive, i)
-            box.set_right(array.get(sBoxes, i), bar_index + 500)
+            box.set_right(array.get(sBoxes, i), time + barMs * 500)
 
 // ─── MITIGATION
 if array.size(dTops) > 0
@@ -284,14 +287,14 @@ if array.size(sTops) > 0
 
 // ─── DRAW ENTRY BOXES
 if validBuy
-    box.new(bar_index, buyEntry, bar_index+zoneExtend, buySL,   border_color=color.new(#e05050,40), bgcolor=colSL, border_width=1)
-    box.new(bar_index, buyTP,    bar_index+zoneExtend, buyEntry, border_color=color.new(#26a69a,40), bgcolor=colTP, border_width=1)
-    label.new(bar_index, buySL, "BUY\nRR 1:1", color=color.new(color.green,60), textcolor=color.white, size=size.small, style=label.style_label_up)
+    box.new(time, buyEntry, time + barMs * zoneExtend, buySL,    xloc=xloc.bar_time, border_color=color.new(#e05050,40), bgcolor=colSL, border_width=1)
+    box.new(time, buyTP,    time + barMs * zoneExtend, buyEntry, xloc=xloc.bar_time, border_color=color.new(#26a69a,40), bgcolor=colTP, border_width=1)
+    label.new(time, buySL, "BUY\nRR 1:1", xloc=xloc.bar_time, color=color.new(color.green,60), textcolor=color.white, size=size.small, style=label.style_label_up)
 
 if validSell
-    box.new(bar_index, sellSL,    bar_index+zoneExtend, sellEntry, border_color=color.new(#e05050,40), bgcolor=colSL, border_width=1)
-    box.new(bar_index, sellEntry, bar_index+zoneExtend, sellTP,    border_color=color.new(#26a69a,40), bgcolor=colTP, border_width=1)
-    label.new(bar_index, sellSL, "SELL\nRR 1:1", color=color.new(color.red,60), textcolor=color.white, size=size.small, style=label.style_label_down)
+    box.new(time, sellSL,    time + barMs * zoneExtend, sellEntry, xloc=xloc.bar_time, border_color=color.new(#e05050,40), bgcolor=colSL, border_width=1)
+    box.new(time, sellEntry, time + barMs * zoneExtend, sellTP,    xloc=xloc.bar_time, border_color=color.new(#26a69a,40), bgcolor=colTP, border_width=1)
+    label.new(time, sellSL, "SELL\nRR 1:1", xloc=xloc.bar_time, color=color.new(color.red,60), textcolor=color.white, size=size.small, style=label.style_label_down)
 
 // ─── SIGNALS & SESSION
 bgcolor(not inSession ? color.new(color.gray, 93) : na, title="Out of Session")
