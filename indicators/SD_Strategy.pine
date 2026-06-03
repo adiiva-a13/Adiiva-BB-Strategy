@@ -51,15 +51,21 @@ var float sh1 = na, var float sh2 = na
 var float sl1 = na, var float sl2 = na
 var int   sh1Bar = na
 var int   sl1Bar = na
+// sh1Bar saved at the moment sl1 was detected = true origin of bearish BOS
+var int   sh1BarForBear = na
+// sl1Bar saved at the moment sh1 was detected = true origin of bullish BOS
+var int   sl1BarForBull = na
 
 if not na(swHigh)
     sh2 := sh1
     sh1 := swHigh
     sh1Bar := bar_index - swingLen
+    sl1BarForBull := sl1Bar
 if not na(swLow)
     sl2 := sl1
     sl1 := swLow
     sl1Bar := bar_index - swingLen
+    sh1BarForBear := sh1Bar
 
 // ─── BOS DETECTION
 var int bullBOSCount = 0
@@ -136,11 +142,11 @@ var bool[]  sActive  = array.new_bool()
 var bool[]  sTouched = array.new_bool()
 var box[]   sBoxes   = array.new_box()
 
-if bullBOS and not na(sl1Bar)
+if bullBOS and not na(sl1BarForBull)
     obTop  = float(na)
     obBot  = float(na)
     obTime = int(na)
-    barsToSL = bar_index - sl1Bar
+    barsToSL = bar_index - sl1BarForBull
     searchEnd = math.min(barsToSL + obLookback, bar_index - 1)
     for i = barsToSL to searchEnd
         if isBearishCandle(i)
@@ -160,11 +166,11 @@ if bullBOS and not na(sl1Bar)
             b = box.new(obTime, obTop, time + barMs * 500, obBot, xloc=xloc.bar_time, border_color=color.new(#26a69a,50), bgcolor=colDemand, border_width=1)
             array.push(dBoxes, b)
 
-if bearBOS and not na(sh1Bar)
+if bearBOS and not na(sh1BarForBear)
     obTop  = float(na)
     obBot  = float(na)
     obTime = int(na)
-    barsToSH = bar_index - sh1Bar
+    barsToSH = bar_index - sh1BarForBear
     searchEnd = math.min(barsToSH + obLookback, bar_index - 1)
     for i = barsToSH to searchEnd
         if isBullishCandle(i)
