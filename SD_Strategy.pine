@@ -1,0 +1,393 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0
+// Supply & Demand Strategy Indicator
+// Logic: BOS on M5 → origin of BOS move = S&D zone → $$ inside zone → fresh retest → entry
+//@version=5
+indicator("Supply & Demand Strategy [SD]", overlay=true, max_boxes_count=500, max_lines_count=500, max_labels_count=500)
+
+// ─── INPUTS
+grpZones   = "Zone Settings"
+grpBOS     = "Break of Structure"
+grpFilter  = "Filters"
+grpSession = "Session Filter"
+grpAlerts  = "Alerts"
+
+swingLen         = input.int(15,    "Swing Lookback",                       group=grpZones,  minval=3, maxval=50)
+zoneExtend       = input.int(40,    "Zone Extension (bars)",                group=grpZones,  minval=10, maxval=200)
+obLookback       = input.int(20,    "OB Lookback from BOS (bars)",          group=grpZones,  minval=5, maxval=50)
+showMitigated    = input.bool(false,"Show Mitigated Zones",                group=grpZones)
+showBOS          = input.bool(true, "Show BOS Lines",                      group=grpBOS)
+bosConfirm       = input.int(2,     "BOS Confirmations needed",            group=grpBOS,    minval=1, maxval=3)
+filterTPClear    = input.bool(true, "Filter: TP 1:1 must be clear",        group=grpFilter)
+filterLiqInZone  = input.bool(true, "Filter: $$ liquidity inside zone",    group=grpFilter)
+filterWeakEntry  = input.bool(true, "Filter: Entry candle must be weak",   group=grpFilter)
+weakCandleMaxPct = input.float(0.4, "Max body % for weak candle",          group=grpFilter, minval=0.05, maxval=2.0, step=0.05)
+eqTol            = input.float(0.05,"Liquidity ($$$) tolerance %",         group=grpFilter, minval=0.01, maxval=0.3, step=0.01)
+alertOnBuy       = input.bool(true, "Alert: Valid BUY Setup",              group=grpAlerts)
+alertOnSell      = input.bool(true, "Alert: Valid SELL Setup",             group=grpAlerts)
+sessionMode      = input.string("Both", "Active Session", options=["London","New York","Both","Off"], group=grpSession)
+londonOpen       = input.session("0800-1700", "London Hours (UTC)",        group=grpSession)
+nyOpen           = input.session("1300-2200", "New York Hours (UTC)",      group=grpSession)
+
+colSupply     = input.color(color.new(#e05050, 80), "Supply Zone", inline="c")
+colDemand     = input.color(color.new(#26a69a, 80), "Demand Zone", inline="c")
+colBOS        = input.color(color.new(color.blue, 40), "BOS Line")
+colInducement = input.color(color.orange,            "Liquidity ($$$)")
+colSL         = input.color(color.new(#e05050, 70),  "SL Zone")
+colTP         = input.color(color.new(#26a69a, 70),  "TP Zone")
+
+// ─── SESSION
+inLondon  = time(timeframe.period, londonOpen, "UTC") != 0
+inNY      = time(timeframe.period, nyOpen,     "UTC") != 0
+inSession = sessionMode == "London" ? inLondon : sessionMode == "New York" ? inNY : sessionMode == "Both" ? inLondon or inNY : true
+
+// ─── BAR DURATION (ms) — used for time-based right edge
+barMs = timeframe.in_seconds() * 1000
+
+// ─── SWING DETECTION
+swHigh = ta.pivothigh(high, swingLen, swingLen)
+swLow  = ta.pivotlow(low,  swingLen, swingLen)
+
+var float sh1 = na, var float sh2 = na
+var float sl1 = na, var float sl2 = na
+var int   sh1Bar = na
+var int   sl1Bar = na
+// sh1 saved at the moment sl1 was detected = true origin of bearish BOS
+var int   sh1BarForBear = na
+// sl1 saved at the moment sh1 was detected = true origin of bullish BOS
+var int   sl1BarForBull = na
+
+if not na(swHigh)
+    sh2 := sh1
+    sh1 := swHigh
+    sh1Bar := bar_index - swingLen
+    sl1BarForBull := sl1Bar
+if not na(swLow)
+    sl2 := sl1
+    sl1 := swLow
+    sl1Bar := bar_index - swingLen
+    sh1BarForBear := sh1Bar
+
+// ─── BOS DETECTION
+var int bullBOSCount = 0
+var int bearBOSCount = 0
+
+bullBOS = not na(sh1) and ta.crossover(close,  sh1)
+bearBOS = not na(sl1) and ta.crossunder(close, sl1)
+
+if bullBOS
+    bullBOSCount := bullBOSCount + 1
+    bearBOSCount := 0
+    if showBOS
+        line.new(time[1], sh1, time + barMs * zoneExtend, sh1, xloc=xloc.bar_time, color=colBOS, style=line.style_dashed, width=1)
+        label.new(time, sh1, "bos", xloc=xloc.bar_time, color=color.new(colBOS,80), textcolor=colBOS, size=size.tiny, style=label.style_label_down)
+
+if bearBOS
+    bearBOSCount := bearBOSCount + 1
+    bullBOSCount := 0
+    if showBOS
+        line.new(time[1], sl1, time + barMs * zoneExtend, sl1, xloc=xloc.bar_time, color=colBOS, style=line.style_dashed, width=1)
+        label.new(time, sl1, "bos", xloc=xloc.bar_time, color=color.new(colBOS,80), textcolor=colBOS, size=size.tiny, style=label.style_label_up)
+
+bullBias = bullBOSCount >= bosConfirm
+bearBias = bearBOSCount >= bosConfirm
+
+// ─── LIQUIDITY ($$$) — Equal Highs / Lows
+var float[] liqLevels = array.new_float()
+var bool[]  liqSwept  = array.new_bool()
+var bool[]  liqIsBull = array.new_bool()
+
+isEqHigh = not na(swHigh) and not na(sh2) and math.abs(swHigh - sh2) / sh2 * 100 < eqTol
+isEqLow  = not na(swLow)  and not na(sl2) and math.abs(swLow  - sl2) / sl2 * 100 < eqTol
+
+if isEqHigh
+    lvl = (swHigh + sh2) / 2
+    array.push(liqLevels, lvl)
+    array.push(liqSwept,  false)
+    array.push(liqIsBull, true)
+    line.new(time[swingLen*2], lvl, time + barMs * (zoneExtend / 2), lvl, xloc=xloc.bar_time, color=colInducement, style=line.style_dotted, width=1)
+    label.new(time[swingLen], lvl, "$$$", xloc=xloc.bar_time, color=color.new(colInducement,75), textcolor=colInducement, size=size.tiny, style=label.style_label_down)
+
+if isEqLow
+    lvl = (swLow + sl2) / 2
+    array.push(liqLevels, lvl)
+    array.push(liqSwept,  false)
+    array.push(liqIsBull, false)
+    line.new(time[swingLen*2], lvl, time + barMs * (zoneExtend / 2), lvl, xloc=xloc.bar_time, color=colInducement, style=line.style_dotted, width=1)
+    label.new(time[swingLen], lvl, "$$$", xloc=xloc.bar_time, color=color.new(colInducement,75), textcolor=colInducement, size=size.tiny, style=label.style_label_up)
+
+if array.size(liqLevels) > 0
+    for i = 0 to array.size(liqLevels) - 1
+        if not array.get(liqSwept, i)
+            lvl    = array.get(liqLevels, i)
+            isBull = array.get(liqIsBull, i)
+            if (isBull and high >= lvl) or (not isBull and low <= lvl)
+                array.set(liqSwept, i, true)
+
+// ─── ORDER BLOCK — linked to BOS origin
+candleBodyPct(idx)   => math.abs(close[idx] - open[idx]) / open[idx] * 100
+isBearishCandle(idx) => close[idx] < open[idx]
+isBullishCandle(idx) => close[idx] > open[idx]
+
+var float[] dTops    = array.new_float()
+var float[] dBots    = array.new_float()
+var int[]   dTimes   = array.new_int()
+var bool[]  dActive  = array.new_bool()
+var bool[]  dTouched = array.new_bool()
+var box[]   dBoxes   = array.new_box()
+
+var float[] sTops    = array.new_float()
+var float[] sBots    = array.new_float()
+var int[]   sTimes   = array.new_int()
+var bool[]  sActive  = array.new_bool()
+var bool[]  sTouched = array.new_bool()
+var box[]   sBoxes   = array.new_box()
+
+if bullBOS and not na(sl1BarForBull)
+    obTop  = float(na)
+    obBot  = float(na)
+    obTime = int(na)
+    barsToSL = bar_index - sl1BarForBull
+    searchEnd = math.min(barsToSL + obLookback, bar_index - 1)
+    for i = barsToSL to searchEnd
+        if isBearishCandle(i)
+            obTop  := high[i]
+            obBot  := low[i]
+            obTime := time[i]
+            break
+    if not na(obTop) and obBot < close
+        dSz = array.size(dTimes)
+        dLT = dSz > 0 ? array.get(dTimes, dSz - 1) : na
+        if na(dLT) or dLT != obTime
+            array.push(dTops,    obTop)
+            array.push(dBots,    obBot)
+            array.push(dTimes,   obTime)
+            array.push(dActive,  true)
+            array.push(dTouched, false)
+            b = box.new(obTime, obTop, time + barMs * 500, obBot, xloc=xloc.bar_time, border_color=color.new(#26a69a,50), bgcolor=colDemand, border_width=1)
+            array.push(dBoxes, b)
+
+if bearBOS and not na(sh1BarForBear)
+    obTop  = float(na)
+    obBot  = float(na)
+    obTime = int(na)
+    barsToSH = bar_index - sh1BarForBear
+    searchEnd = math.min(barsToSH + obLookback, bar_index - 1)
+    for i = barsToSH to searchEnd
+        if isBullishCandle(i)
+            obTop  := high[i]
+            obBot  := low[i]
+            obTime := time[i]
+            break
+    if not na(obTop) and obTop > close
+        sSz = array.size(sTimes)
+        sLT = sSz > 0 ? array.get(sTimes, sSz - 1) : na
+        if na(sLT) or sLT != obTime
+            array.push(sTops,    obTop)
+            array.push(sBots,    obBot)
+            array.push(sTimes,   obTime)
+            array.push(sActive,  true)
+            array.push(sTouched, false)
+            b = box.new(obTime, obTop, time + barMs * 500, obBot, xloc=xloc.bar_time, border_color=color.new(#e05050,50), bgcolor=colSupply, border_width=1)
+            array.push(sBoxes, b)
+
+// ─── EXTEND ACTIVE BOXES — time-anchored, persist on any scroll position
+if array.size(dBoxes) > 0
+    for i = 0 to array.size(dBoxes) - 1
+        if array.get(dActive, i)
+            box.set_right(array.get(dBoxes, i), time + barMs * 500)
+
+if array.size(sBoxes) > 0
+    for i = 0 to array.size(sBoxes) - 1
+        if array.get(sActive, i)
+            box.set_right(array.get(sBoxes, i), time + barMs * 500)
+
+// ─── MITIGATION
+if array.size(dTops) > 0
+    for i = 0 to array.size(dTops) - 1
+        if array.get(dActive, i) and close < array.get(dBots, i)
+            array.set(dActive, i, false)
+            if not showMitigated
+                box.delete(array.get(dBoxes, i))
+
+if array.size(sTops) > 0
+    for i = 0 to array.size(sTops) - 1
+        if array.get(sActive, i) and close > array.get(sTops, i)
+            array.set(sActive, i, false)
+            if not showMitigated
+                box.delete(array.get(sBoxes, i))
+
+// ─── FILTERS
+tpClearForDemand(dTop, dBot) =>
+    tpLevel = dTop + (dTop - dBot)
+    blocked = false
+    n = array.size(sTops)
+    if n > 0
+        for i = 0 to n - 1
+            if array.get(sActive, i) and array.get(sBots, i) < tpLevel and array.get(sTops, i) > dTop
+                blocked := true
+    not blocked
+
+tpClearForSupply(sTop, sBot) =>
+    tpLevel = sBot - (sTop - sBot)
+    blocked = false
+    n = array.size(dTops)
+    if n > 0
+        for i = 0 to n - 1
+            if array.get(dActive, i) and array.get(dTops, i) > tpLevel and array.get(dBots, i) < sBot
+                blocked := true
+    not blocked
+
+liqInsideDemand(dTop, dBot) =>
+    hasLiq = false
+    n = array.size(liqLevels)
+    if n > 0
+        for i = 0 to n - 1
+            lvl = array.get(liqLevels, i)
+            if lvl >= dBot and lvl <= dTop
+                hasLiq := true
+    hasLiq
+
+liqInsideSupply(sTop, sBot) =>
+    hasLiq = false
+    n = array.size(liqLevels)
+    if n > 0
+        for i = 0 to n - 1
+            lvl = array.get(liqLevels, i)
+            if lvl >= sBot and lvl <= sTop
+                hasLiq := true
+    hasLiq
+
+// ─── SIGNAL BOX TRACKING — extend until invalidation
+var box[]   sellSigSLBoxes   = array.new_box()
+var box[]   sellSigTPBoxes   = array.new_box()
+var label[] sellSigLabels    = array.new_label()
+var float[] sellSigInvLevels = array.new_float()
+var bool[]  sellSigActive    = array.new_bool()
+
+var box[]   buySigSLBoxes    = array.new_box()
+var box[]   buySigTPBoxes    = array.new_box()
+var label[] buySigLabels     = array.new_label()
+var float[] buySigInvLevels  = array.new_float()
+var bool[]  buySigActive     = array.new_bool()
+
+// ─── VALID SETUP DETECTION
+var bool  validBuy  = false, var bool  validSell = false
+var float buyEntry  = na,    var float buySL     = na, var float buyTP  = na
+var float sellEntry = na,    var float sellSL    = na, var float sellTP = na
+
+validBuy  := false
+validSell := false
+
+isWeakCandle = candleBodyPct(0) <= weakCandleMaxPct
+
+if array.size(dTops) > 0
+    for i = 0 to array.size(dTops) - 1
+        if array.get(dActive, i) and not array.get(dTouched, i)
+            dTop = array.get(dTops, i)
+            dBot = array.get(dBots, i)
+            if low <= dTop and high >= dBot
+                array.set(dTouched, i, true)
+                okTP   = not filterTPClear   or tpClearForDemand(dTop, dBot)
+                okLiq  = not filterLiqInZone or liqInsideDemand(dTop, dBot)
+                okWeak = not filterWeakEntry or isWeakCandle
+                if bullBias and okTP and okLiq and okWeak
+                    validBuy := true
+                    buyEntry := dTop
+                    buySL    := dBot
+                    buyTP    := dTop + (dTop - dBot)
+
+if array.size(sTops) > 0
+    for i = 0 to array.size(sTops) - 1
+        if array.get(sActive, i) and not array.get(sTouched, i)
+            sTop = array.get(sTops, i)
+            sBot = array.get(sBots, i)
+            if low <= sTop and high >= sBot
+                array.set(sTouched, i, true)
+                okTP   = not filterTPClear   or tpClearForSupply(sTop, sBot)
+                okLiq  = not filterLiqInZone or liqInsideSupply(sTop, sBot)
+                okWeak = not filterWeakEntry or isWeakCandle
+                if bearBias and okTP and okLiq and okWeak
+                    validSell := true
+                    sellEntry := sBot
+                    sellSL    := sTop
+                    sellTP    := sBot - (sTop - sBot)
+
+// ─── DRAW ENTRY BOXES — tracked for auto-extension
+if validBuy
+    b1 = box.new(time, buyEntry, time + barMs * zoneExtend, buySL,    xloc=xloc.bar_time, border_color=color.new(#e05050,40), bgcolor=colSL, border_width=1)
+    b2 = box.new(time, buyTP,    time + barMs * zoneExtend, buyEntry, xloc=xloc.bar_time, border_color=color.new(#26a69a,40), bgcolor=colTP, border_width=1)
+    lb = label.new(time, buySL, "BUY\nRR 1:1", xloc=xloc.bar_time, color=color.new(color.green,60), textcolor=color.white, size=size.small, style=label.style_label_up)
+    array.push(buySigSLBoxes,   b1)
+    array.push(buySigTPBoxes,   b2)
+    array.push(buySigLabels,    lb)
+    array.push(buySigInvLevels, buySL)
+    array.push(buySigActive,    true)
+
+if validSell
+    b1 = box.new(time, sellSL,    time + barMs * zoneExtend, sellEntry, xloc=xloc.bar_time, border_color=color.new(#e05050,40), bgcolor=colSL, border_width=1)
+    b2 = box.new(time, sellEntry, time + barMs * zoneExtend, sellTP,    xloc=xloc.bar_time, border_color=color.new(#26a69a,40), bgcolor=colTP, border_width=1)
+    lb = label.new(time, sellSL, "SELL\nRR 1:1", xloc=xloc.bar_time, color=color.new(color.red,60), textcolor=color.white, size=size.small, style=label.style_label_down)
+    array.push(sellSigSLBoxes,   b1)
+    array.push(sellSigTPBoxes,   b2)
+    array.push(sellSigLabels,    lb)
+    array.push(sellSigInvLevels, sellSL)
+    array.push(sellSigActive,    true)
+
+// ─── EXTEND SIGNAL BOXES until invalidation
+if array.size(sellSigSLBoxes) > 0
+    for i = 0 to array.size(sellSigSLBoxes) - 1
+        if array.get(sellSigActive, i)
+            if close > array.get(sellSigInvLevels, i)
+                array.set(sellSigActive, i, false)
+            else
+                box.set_right(array.get(sellSigSLBoxes, i), time + barMs * zoneExtend)
+                box.set_right(array.get(sellSigTPBoxes, i), time + barMs * zoneExtend)
+
+if array.size(buySigSLBoxes) > 0
+    for i = 0 to array.size(buySigSLBoxes) - 1
+        if array.get(buySigActive, i)
+            if close < array.get(buySigInvLevels, i)
+                array.set(buySigActive, i, false)
+            else
+                box.set_right(array.get(buySigSLBoxes, i), time + barMs * zoneExtend)
+                box.set_right(array.get(buySigTPBoxes, i), time + barMs * zoneExtend)
+
+// ─── SIGNALS & SESSION
+bgcolor(not inSession ? color.new(color.gray, 93) : na, title="Out of Session")
+plotshape(validBuy  and alertOnBuy  and inSession, "BUY Signal",  shape.triangleup,   location.belowbar, color.green, size=size.normal)
+plotshape(validSell and alertOnSell and inSession, "SELL Signal", shape.triangledown, location.abovebar, color.red,   size=size.normal)
+
+// ─── ALERTS
+alertcondition(validBuy  and alertOnBuy  and inSession, title="SD BUY Setup",  message='{"action":"buy","symbol":"{{ticker}}","timeframe":"{{interval}}","entry":"{{close}}","comment":"SD BUY: BOS+OB+LIQ RR1:1"}')
+alertcondition(validSell and alertOnSell and inSession, title="SD SELL Setup", message='{"action":"sell","symbol":"{{ticker}}","timeframe":"{{interval}}","entry":"{{close}}","comment":"SD SELL: BOS+OB+LIQ RR1:1"}')
+
+// ─── INFO TABLE
+var table tbl = table.new(position.top_right, 2, 6, bgcolor=color.new(color.black,80), border_width=1)
+
+if barstate.islast
+    table.cell(tbl, 0, 0, "SD Strategy", text_color=color.white, text_size=size.small)
+    table.cell(tbl, 1, 0, "Status",       text_color=color.white, text_size=size.small)
+    biasText  = bullBias ? "BULL ▲" : bearBias ? "BEAR ▼" : "NEUTRAL"
+    biasColor = bullBias ? color.green : bearBias ? color.red : color.gray
+    table.cell(tbl, 0, 1, "Bias",      text_color=color.gray, text_size=size.tiny)
+    table.cell(tbl, 1, 1, biasText,    text_color=biasColor,  text_size=size.tiny)
+    table.cell(tbl, 0, 2, "BOS Count", text_color=color.gray, text_size=size.tiny)
+    table.cell(tbl, 1, 2, str.tostring(math.max(bullBOSCount, bearBOSCount)), text_color=color.white, text_size=size.tiny)
+    activeDemand = 0
+    if array.size(dActive) > 0
+        for i = 0 to array.size(dActive) - 1
+            if array.get(dActive, i) and not array.get(dTouched, i)
+                activeDemand += 1
+    table.cell(tbl, 0, 3, "Demand", text_color=color.gray, text_size=size.tiny)
+    table.cell(tbl, 1, 3, str.tostring(activeDemand), text_color=#26a69a, text_size=size.tiny)
+    activeSupply = 0
+    if array.size(sActive) > 0
+        for i = 0 to array.size(sActive) - 1
+            if array.get(sActive, i) and not array.get(sTouched, i)
+                activeSupply += 1
+    table.cell(tbl, 0, 4, "Supply", text_color=color.gray, text_size=size.tiny)
+    table.cell(tbl, 1, 4, str.tostring(activeSupply), text_color=#e05050, text_size=size.tiny)
+    sigText  = validBuy ? "BUY ▲" : validSell ? "SELL ▼" : "—"
+    sigColor = validBuy ? color.green : validSell ? color.red : color.gray
+    table.cell(tbl, 0, 5, "Signal", text_color=color.gray, text_size=size.tiny)
+    table.cell(tbl, 1, 5, sigText,  text_color=sigColor,   text_size=size.tiny)
