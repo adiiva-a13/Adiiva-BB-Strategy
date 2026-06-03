@@ -1,5 +1,6 @@
 // This source code is subject to the terms of the Mozilla Public License 2.0
 // Supply & Demand Strategy Indicator
+// Logic: BOS on M5 → origin of BOS move = S&D zone → $$ inside zone → fresh retest → entry
 //@version=5
 indicator("Supply & Demand Strategy [SD]", overlay=true, max_boxes_count=100, max_lines_count=200, max_labels_count=200)
 
@@ -10,17 +11,19 @@ grpFilter  = "Filters"
 grpSession = "Session Filter"
 grpAlerts  = "Alerts"
 
-swingLen         = input.int(15,    "Swing Lookback",                       group=grpZones,   minval=3, maxval=50)
-zoneExtend       = input.int(40,    "Zone Extension (bars)",                group=grpZones,   minval=10, maxval=200)
-impulseMinPct    = input.float(0.8, "Min Impulse % for OB",                group=grpZones,   minval=0.1, maxval=5.0, step=0.1)
+swingLen         = input.int(15,    "Swing Lookback",                       group=grpZones,  minval=3, maxval=50)
+zoneExtend       = input.int(40,    "Zone Extension (bars)",                group=grpZones,  minval=10, maxval=200)
+obLookback       = input.int(20,    "OB Lookback from BOS (bars)",          group=grpZones,  minval=5, maxval=50,
+                             tooltip="How far back to search for the Order Block that caused the BOS")
 showMitigated    = input.bool(false,"Show Mitigated Zones",                group=grpZones)
 showBOS          = input.bool(true, "Show BOS Lines",                      group=grpBOS)
-bosConfirm       = input.int(2,     "BOS Confirmations needed",            group=grpBOS,     minval=1, maxval=3)
+bosConfirm       = input.int(2,     "BOS Confirmations needed",            group=grpBOS,    minval=1, maxval=3)
 filterTPClear    = input.bool(true, "Filter: TP 1:1 must be clear",        group=grpFilter)
-filterInduce     = input.bool(true, "Filter: Inducement must be consumed", group=grpFilter)
+filterLiqInZone  = input.bool(true, "Filter: $$ liquidity inside zone",    group=grpFilter,
+                             tooltip="Zone must contain a $$ level inside it (equal high/low)")
 filterWeakEntry  = input.bool(true, "Filter: Entry candle must be weak",   group=grpFilter)
-weakCandleMaxPct = input.float(0.4, "Max body % for weak candle",          group=grpFilter,  minval=0.05, maxval=2.0, step=0.05)
-eqTol            = input.float(0.05,"Inducement tolerance %",              group=grpFilter,  minval=0.01, maxval=0.3, step=0.01)
+weakCandleMaxPct = input.float(0.4, "Max body % for weak candle",          group=grpFilter, minval=0.05, maxval=2.0, step=0.05)
+eqTol            = input.float(0.05,"Inducement ($$$) tolerance %",        group=grpFilter, minval=0.01, maxval=0.3, step=0.01)
 alertOnBuy       = input.bool(true, "Alert: Valid BUY Setup",              group=grpAlerts)
 alertOnSell      = input.bool(true, "Alert: Valid SELL Setup",             group=grpAlerts)
 sessionMode      = input.string("Both", "Active Session", options=["London","New York","Both","Off"], group=grpSession)
@@ -30,7 +33,7 @@ nyOpen           = input.session("1300-2200", "New York Hours (UTC)",      group
 colSupply     = input.color(color.new(#e05050, 80), "Supply Zone", inline="c")
 colDemand     = input.color(color.new(#26a69a, 80), "Demand Zone", inline="c")
 colBOS        = input.color(color.new(color.blue, 40), "BOS Line")
-colInducement = input.color(color.orange,            "Inducement ($$$)")
+colInducement = input.color(color.orange,            "Liquidity ($$$)")
 colSL         = input.color(color.new(#e05050, 70),  "SL Zone")
 colTP         = input.color(color.new(#26a69a, 70),  "TP Zone")
 
@@ -77,151 +80,123 @@ if bearBOS
 bullBias = bullBOSCount >= bosConfirm
 bearBias = bearBOSCount >= bosConfirm
 
-// ─── ORDER BLOCK DETECTION
-candleBodyPct(idx)   => math.abs(close[idx] - open[idx]) / open[idx] * 100
-isBearishCandle(idx) => close[idx] < open[idx]
-isBullishCandle(idx) => close[idx] > open[idx]
-
-impulseUp = (close - close[3]) / close[3] * 100 >= impulseMinPct and close > open
-impulseDn = (close[3] - close) / close[3] * 100 >= impulseMinPct and close < open
-
-var float demandTop = na, var float demandBot = na, var int demandBar = na
-var float supplyTop = na, var float supplyBot = na, var int supplyBar = na
-
-if impulseUp
-    for i = 1 to 5
-        if isBearishCandle(i)
-            demandTop := high[i]
-            demandBot := low[i]
-            demandBar := bar_index - i
-            break
-
-if impulseDn
-    for i = 1 to 5
-        if isBullishCandle(i)
-            supplyTop := high[i]
-            supplyBot := low[i]
-            supplyBar := bar_index - i
-            break
-
-// ─── ZONE ARRAYS
-var float[] dTops    = array.new_float()
-var float[] dBots    = array.new_float()
-var int[]   dBars    = array.new_int()
-var bool[]  dActive  = array.new_bool()
-var bool[]  dTouched = array.new_bool()   // true = price already entered zone once
-var box[]   dBoxes   = array.new_box()
-
-var float[] sTops    = array.new_float()
-var float[] sBots    = array.new_float()
-var int[]   sBars    = array.new_int()
-var bool[]  sActive  = array.new_bool()
-var bool[]  sTouched = array.new_bool()   // true = price already entered zone once
-var box[]   sBoxes   = array.new_box()
-
-// Safe last-bar helpers
-dSize    = array.size(dBars)
-dLastBar = dSize > 0 ? array.get(dBars, dSize - 1) : na
-sSize    = array.size(sBars)
-sLastBar = sSize > 0 ? array.get(sBars, sSize - 1) : na
-
-newDemand = not na(demandTop) and not na(demandBar) and (na(dLastBar) or dLastBar != demandBar)
-newSupply = not na(supplyTop) and not na(supplyBar) and (na(sLastBar) or sLastBar != supplyBar)
-
-if newDemand
-    array.push(dTops,    demandTop)
-    array.push(dBots,    demandBot)
-    array.push(dBars,    demandBar)
-    array.push(dActive,  true)
-    array.push(dTouched, false)
-    b = box.new(demandBar, demandTop, bar_index+zoneExtend, demandBot, border_color=color.new(#26a69a,50), bgcolor=colDemand, border_width=1)
-    array.push(dBoxes, b)
-
-if newSupply
-    array.push(sTops,    supplyTop)
-    array.push(sBots,    supplyBot)
-    array.push(sBars,    supplyBar)
-    array.push(sActive,  true)
-    array.push(sTouched, false)
-    b = box.new(supplyBar, supplyTop, bar_index+zoneExtend, supplyBot, border_color=color.new(#e05050,50), bgcolor=colSupply, border_width=1)
-    array.push(sBoxes, b)
-
-// ─── MITIGATION
-// Demand: mitigated when price CLOSES below the zone bottom
-// Supply: mitigated when price CLOSES above the zone top
-// A zone is also invalidated (touched) the moment price enters it—
-// so it can only trigger ONE signal, then it’s marked touched and ignored.
-if array.size(dTops) > 0
-    for i = 0 to array.size(dTops) - 1
-        if array.get(dActive, i)
-            dTop = array.get(dTops, i)
-            dBot = array.get(dBots, i)
-            // Full mitigation: close below zone bottom
-            if close < array.get(dBots, i)
-                array.set(dActive, i, false)
-                if not showMitigated
-                    box.delete(array.get(dBoxes, i))
-
-if array.size(sTops) > 0
-    for i = 0 to array.size(sTops) - 1
-        if array.get(sActive, i)
-            // Full mitigation: close above zone top
-            if close > array.get(sTops, i)
-                array.set(sActive, i, false)
-                if not showMitigated
-                    box.delete(array.get(sBoxes, i))
-
-// ─── INDUCEMENT
-var float[] inducementLevels = array.new_float()
-var bool[]  inducementSwept  = array.new_bool()
-var bool[]  inducementIsBull = array.new_bool()
+// ─── LIQUIDITY ($$$) DETECTION — Equal Highs / Lows
+var float[] liqLevels  = array.new_float()
+var bool[]  liqSwept   = array.new_bool()
+var bool[]  liqIsBull  = array.new_bool()
 
 isEqHigh = not na(swHigh) and not na(sh2) and math.abs(swHigh - sh2) / sh2 * 100 < eqTol
 isEqLow  = not na(swLow)  and not na(sl2) and math.abs(swLow  - sl2) / sl2 * 100 < eqTol
 
 if isEqHigh
     lvl = (swHigh + sh2) / 2
-    array.push(inducementLevels, lvl)
-    array.push(inducementSwept,  false)
-    array.push(inducementIsBull, true)
+    array.push(liqLevels, lvl)
+    array.push(liqSwept,  false)
+    array.push(liqIsBull, true)
     line.new(bar_index-swingLen*2, lvl, bar_index+zoneExtend/2, lvl, color=colInducement, style=line.style_dotted, width=1)
     label.new(bar_index-swingLen, lvl, "$$$", color=color.new(colInducement,75), textcolor=colInducement, size=size.tiny, style=label.style_label_down)
 
 if isEqLow
     lvl = (swLow + sl2) / 2
-    array.push(inducementLevels, lvl)
-    array.push(inducementSwept,  false)
-    array.push(inducementIsBull, false)
+    array.push(liqLevels, lvl)
+    array.push(liqSwept,  false)
+    array.push(liqIsBull, false)
     line.new(bar_index-swingLen*2, lvl, bar_index+zoneExtend/2, lvl, color=colInducement, style=line.style_dotted, width=1)
     label.new(bar_index-swingLen, lvl, "$$$", color=color.new(colInducement,75), textcolor=colInducement, size=size.tiny, style=label.style_label_up)
 
-if array.size(inducementLevels) > 0
-    for i = 0 to array.size(inducementLevels) - 1
-        if not array.get(inducementSwept, i)
-            lvl    = array.get(inducementLevels, i)
-            isBull = array.get(inducementIsBull, i)
+// Mark swept
+if array.size(liqLevels) > 0
+    for i = 0 to array.size(liqLevels) - 1
+        if not array.get(liqSwept, i)
+            lvl    = array.get(liqLevels, i)
+            isBull = array.get(liqIsBull, i)
             if (isBull and high >= lvl) or (not isBull and low <= lvl)
-                array.set(inducementSwept, i, true)
+                array.set(liqSwept, i, true)
 
-inducementSweptForBuy() =>
-    swept = false
-    n = array.size(inducementLevels)
-    if n > 0
-        for i = 0 to n - 1
-            if not array.get(inducementIsBull, i) and array.get(inducementSwept, i)
-                swept := true
-    swept
+// ─── ORDER BLOCK DETECTION — linked to BOS
+// Zone = origin of the move that caused the BOS (NOT independent OB detection)
+candleBodyPct(idx)   => math.abs(close[idx] - open[idx]) / open[idx] * 100
+isBearishCandle(idx) => close[idx] < open[idx]
+isBullishCandle(idx) => close[idx] > open[idx]
 
-inducementSweptForSell() =>
-    swept = false
-    n = array.size(inducementLevels)
-    if n > 0
-        for i = 0 to n - 1
-            if array.get(inducementIsBull, i) and array.get(inducementSwept, i)
-                swept := true
-    swept
+var float[] dTops    = array.new_float()
+var float[] dBots    = array.new_float()
+var int[]   dBars    = array.new_int()
+var bool[]  dActive  = array.new_bool()
+var bool[]  dTouched = array.new_bool()
+var box[]   dBoxes   = array.new_box()
 
-// ─── TP CLEAR FILTER
+var float[] sTops    = array.new_float()
+var float[] sBots    = array.new_float()
+var int[]   sBars    = array.new_int()
+var bool[]  sActive  = array.new_bool()
+var bool[]  sTouched = array.new_bool()
+var box[]   sBoxes   = array.new_box()
+
+// On bullish BOS: look back for last bearish candle (demand OB = origin of bull move)
+if bullBOS
+    obTop = float(na)
+    obBot = float(na)
+    obBar = int(na)
+    for i = 1 to obLookback
+        if isBearishCandle(i)
+            obTop := high[i]
+            obBot := low[i]
+            obBar := bar_index - i
+            break
+    if not na(obTop)
+        dSize    = array.size(dBars)
+        dLastBar = dSize > 0 ? array.get(dBars, dSize - 1) : na
+        if na(dLastBar) or dLastBar != obBar
+            array.push(dTops,    obTop)
+            array.push(dBots,    obBot)
+            array.push(dBars,    obBar)
+            array.push(dActive,  true)
+            array.push(dTouched, false)
+            b = box.new(obBar, obTop, bar_index+zoneExtend, obBot, border_color=color.new(#26a69a,50), bgcolor=colDemand, border_width=1)
+            array.push(dBoxes, b)
+
+// On bearish BOS: look back for last bullish candle (supply OB = origin of bear move)
+if bearBOS
+    obTop = float(na)
+    obBot = float(na)
+    obBar = int(na)
+    for i = 1 to obLookback
+        if isBullishCandle(i)
+            obTop := high[i]
+            obBot := low[i]
+            obBar := bar_index - i
+            break
+    if not na(obTop)
+        sSize    = array.size(sBars)
+        sLastBar = sSize > 0 ? array.get(sBars, sSize - 1) : na
+        if na(sLastBar) or sLastBar != obBar
+            array.push(sTops,    obTop)
+            array.push(sBots,    obBot)
+            array.push(sBars,    obBar)
+            array.push(sActive,  true)
+            array.push(sTouched, false)
+            b = box.new(obBar, obTop, bar_index+zoneExtend, obBot, border_color=color.new(#e05050,50), bgcolor=colSupply, border_width=1)
+            array.push(sBoxes, b)
+
+// ─── MITIGATION — close outside zone = fully mitigated
+if array.size(dTops) > 0
+    for i = 0 to array.size(dTops) - 1
+        if array.get(dActive, i) and close < array.get(dBots, i)
+            array.set(dActive, i, false)
+            if not showMitigated
+                box.delete(array.get(dBoxes, i))
+
+if array.size(sTops) > 0
+    for i = 0 to array.size(sTops) - 1
+        if array.get(sActive, i) and close > array.get(sTops, i)
+            array.set(sActive, i, false)
+            if not showMitigated
+                box.delete(array.get(sBoxes, i))
+
+// ─── FILTERS
+
+// TP 1:1 clear path
 tpClearForDemand(dTop, dBot) =>
     tpLevel = dTop + (dTop - dBot)
     blocked = false
@@ -242,11 +217,30 @@ tpClearForSupply(sTop, sBot) =>
                 blocked := true
     not blocked
 
+// $$ liquidity INSIDE the zone (equal high/low between zone top and bottom)
+liqInsideDemand(dTop, dBot) =>
+    hasLiq = false
+    n = array.size(liqLevels)
+    if n > 0
+        for i = 0 to n - 1
+            lvl = array.get(liqLevels, i)
+            // Liq level must be within zone boundaries
+            if lvl >= dBot and lvl <= dTop
+                hasLiq := true
+    hasLiq
+
+liqInsideSupply(sTop, sBot) =>
+    hasLiq = false
+    n = array.size(liqLevels)
+    if n > 0
+        for i = 0 to n - 1
+            lvl = array.get(liqLevels, i)
+            if lvl >= sBot and lvl <= sTop
+                hasLiq := true
+    hasLiq
+
 // ─── VALID SETUP DETECTION
-// A zone is valid ONLY if it is:
-//   1. Active (not mitigated)
-//   2. NOT yet touched (nemitigata = pretul nu a intrat niciodata inainte)
-//   3. Price is entering it NOW for the FIRST time
+// Zone must be: active + nemitigata (not touched) + price entering for first time
 var bool  validBuy  = false, var bool  validSell = false
 var float buyEntry  = na,    var float buySL     = na, var float buyTP  = na
 var float sellEntry = na,    var float sellSL    = na, var float sellTP = na
@@ -261,15 +255,12 @@ if array.size(dTops) > 0
         if array.get(dActive, i) and not array.get(dTouched, i)
             dTop = array.get(dTops, i)
             dBot = array.get(dBots, i)
-            priceInZone = low <= dTop and high >= dBot
-            if priceInZone
-                // Mark as touched immediately — zone can only fire once
+            if low <= dTop and high >= dBot
                 array.set(dTouched, i, true)
-                okBOS  = not filterInduce    or bullBias
-                okInd  = not filterInduce    or inducementSweptForBuy()
                 okTP   = not filterTPClear   or tpClearForDemand(dTop, dBot)
+                okLiq  = not filterLiqInZone or liqInsideDemand(dTop, dBot)
                 okWeak = not filterWeakEntry or isWeakCandle
-                if okBOS and okInd and okTP and okWeak
+                if bullBias and okTP and okLiq and okWeak
                     validBuy := true
                     buyEntry := dTop
                     buySL    := dBot
@@ -280,21 +271,18 @@ if array.size(sTops) > 0
         if array.get(sActive, i) and not array.get(sTouched, i)
             sTop = array.get(sTops, i)
             sBot = array.get(sBots, i)
-            priceInZone = low <= sTop and high >= sBot
-            if priceInZone
-                // Mark as touched immediately — zone can only fire once
+            if low <= sTop and high >= sBot
                 array.set(sTouched, i, true)
-                okBOS  = not filterInduce    or bearBias
-                okInd  = not filterInduce    or inducementSweptForSell()
                 okTP   = not filterTPClear   or tpClearForSupply(sTop, sBot)
+                okLiq  = not filterLiqInZone or liqInsideSupply(sTop, sBot)
                 okWeak = not filterWeakEntry or isWeakCandle
-                if okBOS and okInd and okTP and okWeak
+                if bearBias and okTP and okLiq and okWeak
                     validSell := true
                     sellEntry := sBot
                     sellSL    := sTop
                     sellTP    := sBot - (sTop - sBot)
 
-// ─── DRAW ENTRY BOXES (only on signal bar)
+// ─── DRAW ENTRY BOXES
 if validBuy
     box.new(bar_index, buyEntry, bar_index+zoneExtend, buySL,    border_color=color.new(#e05050,40), bgcolor=colSL, border_width=1)
     box.new(bar_index, buyTP,    bar_index+zoneExtend, buyEntry,  border_color=color.new(#26a69a,40), bgcolor=colTP, border_width=1)
@@ -305,14 +293,14 @@ if validSell
     box.new(bar_index, sellEntry, bar_index+zoneExtend, sellTP,    border_color=color.new(#26a69a,40), bgcolor=colTP, border_width=1)
     label.new(bar_index, sellSL, "SELL\nRR 1:1", color=color.new(color.red,60), textcolor=color.white, size=size.small, style=label.style_label_down)
 
-// ─── SIGNALS & SESSION HIGHLIGHT
+// ─── SIGNALS & SESSION
 bgcolor(not inSession ? color.new(color.gray, 93) : na, title="Out of Session")
 plotshape(validBuy  and alertOnBuy  and inSession, "BUY Signal",  shape.triangleup,   location.belowbar, color.green, size=size.normal)
 plotshape(validSell and alertOnSell and inSession, "SELL Signal", shape.triangledown, location.abovebar, color.red,   size=size.normal)
 
 // ─── ALERTS
-alertcondition(validBuy  and alertOnBuy  and inSession, title="SD BUY Setup",  message='{"action":"buy","symbol":"{{ticker}}","timeframe":"{{interval}}","entry":"{{close}}","comment":"SD Valid BUY - RR 1:1"}')
-alertcondition(validSell and alertOnSell and inSession, title="SD SELL Setup", message='{"action":"sell","symbol":"{{ticker}}","timeframe":"{{interval}}","entry":"{{close}}","comment":"SD Valid SELL - RR 1:1"}')
+alertcondition(validBuy  and alertOnBuy  and inSession, title="SD BUY Setup",  message='{"action":"buy","symbol":"{{ticker}}","timeframe":"{{interval}}","entry":"{{close}}","comment":"SD BUY: BOS+OB+LIQ RR1:1"}')
+alertcondition(validSell and alertOnSell and inSession, title="SD SELL Setup", message='{"action":"sell","symbol":"{{ticker}}","timeframe":"{{interval}}","entry":"{{close}}","comment":"SD SELL: BOS+OB+LIQ RR1:1"}')
 
 // ─── INFO TABLE
 var table tbl = table.new(position.top_right, 2, 6, bgcolor=color.new(color.black,80), border_width=1)
