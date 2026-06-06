@@ -250,39 +250,48 @@ plotshape(long_ok,   "LONG Signal",  shape.labelup,      location.belowbar, colo
 plotshape(short_ok,  "SHORT Signal", shape.labeldown,    location.abovebar, color.red,     size=size.normal, text="SHORT", textcolor=color.white)
 
 // ================================================================================
-// ETICHETE PE LINII - apar la inceputul sesiunii (nu la dreapta chartului)
-// VAH   = Value Area High  (limita superioara zona de valoare)
-// VAL   = Value Area Low   (limita inferioara zona de valoare)
-// POC   = Point of Control (pretul cu cel mai mare volum tranzactionat)
-// VWAP  = VWAP calculat din sesiunea PVP 12:00-16:00
-// D.H   = Daily High  (maximul zilei calendaristice)
-// D.L   = Daily Low   (minimul zilei calendaristice)
-// NY.H  = NY Session High  (maximul sesiunii NY, de la 16:30 RO)
-// NY.L  = NY Session Low   (minimul sesiunii NY, de la 16:30 RO)
-// 4H.H  = High prima lumanare 4H NY (16:30-20:30 RO)
-// 4H.L  = Low prima lumanare 4H NY  (16:30-20:30 RO)
+// ETICHETE INLINE PE LINII
+// Text discret direct pe linie, fara box, la ora ~18:00 (mijlocul sesiunii)
+//
+// Legenda:
+//   VAH   = Value Area High  (limita sus a zonei de valoare)
+//   VAL   = Value Area Low   (limita jos a zonei de valoare)
+//   POC   = Point of Control (pret cu volum maxim)
+//   VWAP  = VWAP sesiune PVP (12:00-16:00)
+//   D.H   = Daily High  (maximul zilei de la 00:00)
+//   D.L   = Daily Low   (minimul zilei de la 00:00)
+//   NY.H  = NY Session High  (maxim de la 16:30 RO)
+//   NY.L  = NY Session Low   (minim  de la 16:30 RO)
+//   4H.H  = High prima lumanare 4H NY (16:30-20:30 RO)
+//   4H.L  = Low  prima lumanare 4H NY (16:30-20:30 RO)
 // ================================================================================
-if pvp_ended
+var bool lbl_drawn = false
+if pvp_started
+    lbl_drawn := false
+
+// Deseneaza o singura data per zi cand ajungem la ora 18:00 (mijlocul sesiunii)
+if is_trade and not lbl_drawn and hour(time, TZ) >= 18
+    lbl_drawn := true
     if not na(vah)
-        label.new(bar_index, vah,      "VAH",  color=color.new(i_col_vah,  75), textcolor=i_col_vah,  style=label.style_label_right, size=size.small)
+        label.new(bar_index, vah,      "VAH",  style=label.style_none, textcolor=i_col_vah,  size=size.small)
     if not na(val_l)
-        label.new(bar_index, val_l,    "VAL",  color=color.new(i_col_val,  75), textcolor=i_col_val,  style=label.style_label_right, size=size.small)
+        label.new(bar_index, val_l,    "VAL",  style=label.style_none, textcolor=i_col_val,  size=size.small)
     if not na(poc_)
-        label.new(bar_index, poc_,     "POC",  color=color.new(i_col_poc,  75), textcolor=i_col_poc,  style=label.style_label_right, size=size.small)
+        label.new(bar_index, poc_,     "POC",  style=label.style_none, textcolor=i_col_poc,  size=size.small)
     if not na(pvp_vwap)
-        label.new(bar_index, pvp_vwap, "VWAP", color=color.new(i_col_vwap, 75), textcolor=i_col_vwap, style=label.style_label_right, size=size.small)
+        label.new(bar_index, pvp_vwap, "VWAP", style=label.style_none, textcolor=i_col_vwap, size=size.small)
     if not na(day_h)
-        label.new(bar_index, day_h,    "D.H",  color=color.new(i_col_dhl,  75), textcolor=i_col_dhl,  style=label.style_label_right, size=size.small)
+        label.new(bar_index, day_h,    "D.H",  style=label.style_none, textcolor=i_col_dhl,  size=size.small)
     if not na(day_l)
-        label.new(bar_index, day_l,    "D.L",  color=color.new(i_col_dhl,  75), textcolor=i_col_dhl,  style=label.style_label_right, size=size.small)
-
-if nyday_started
-    label.new(bar_index, high, "NY.H", color=color.new(i_col_nyhl, 75), textcolor=i_col_nyhl, style=label.style_label_right, size=size.small)
-    label.new(bar_index, low,  "NY.L", color=color.new(i_col_nyhl, 75), textcolor=i_col_nyhl, style=label.style_label_right, size=size.small)
-
-if ny4h_started
-    label.new(bar_index, high, "4H.H", color=color.new(i_col_4hhl, 75), textcolor=i_col_4hhl, style=label.style_label_right, size=size.small)
-    label.new(bar_index, low,  "4H.L", color=color.new(i_col_4hhl, 75), textcolor=i_col_4hhl, style=label.style_label_right, size=size.small)
+        label.new(bar_index, day_l,    "D.L",  style=label.style_none, textcolor=i_col_dhl,  size=size.small)
+    if not na(ny_day_h)
+        label.new(bar_index, ny_day_h, "NY.H", style=label.style_none, textcolor=i_col_nyhl, size=size.small)
+    if not na(ny_day_l)
+        label.new(bar_index, ny_day_l, "NY.L", style=label.style_none, textcolor=i_col_nyhl, size=size.small)
+    if not na(ny4h_h)
+        label.new(bar_index, ny4h_h,   "4H.H", style=label.style_none, textcolor=i_col_4hhl, size=size.small)
+    if not na(ny4h_l)
+        label.new(bar_index, ny4h_l,   "4H.L", style=label.style_none, textcolor=i_col_4hhl, size=size.small)
 
 alertcondition(long_ok,  "LONG",  "Adiiva: LONG - deasupra VAH & VWAP | Bullish MSS")
 alertcondition(short_ok, "SHORT", "Adiiva: SHORT - sub VAL & VWAP | Bearish MSS")
