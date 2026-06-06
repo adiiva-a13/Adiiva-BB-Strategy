@@ -15,7 +15,7 @@ i_col_sess = input.color(color.new(color.blue,   88), "Trading Session BG",  gro
 i_col_vah  = input.color(color.new(color.lime,    0), "VAH",                 group="Visual")
 i_col_val  = input.color(color.new(color.red,     0), "VAL",                 group="Visual")
 i_col_poc  = input.color(color.new(color.orange,  0), "POC",                 group="Visual")
-i_col_vwap = input.color(color.new(color.purple,  0), "VWAP",                group="Visual")
+i_col_vwap = input.color(color.new(color.purple,  0), "VWAP (PVP 12-16)",   group="Visual")
 i_col_dhl  = input.color(color.new(color.blue,    0), "Day H/L",             group="Visual")
 i_col_nyhl = input.color(color.new(color.orange,  0), "NY Day H/L (prev)",   group="Visual")
 i_col_4hhl = input.color(color.new(color.teal,    0), "NY 4H H/L (prev)",    group="Visual")
@@ -130,11 +130,9 @@ running_vwap = _vsum > 0.0 ? _wpsum / _vsum : na
 
 // ================================================================================
 // HIGH / LOW LEVELS
-// day_h / day_l     : high/low de la miezul noptii pana la 16:00 (fixe din 16:00)
-// ny_day_h/l        : acumulate in sesiunea NY curenta (16:30-23:00)
-// ny4h_h/l          : acumulate in prima lumanare 4H NY (16:30-20:30)
-// prev_ny_h/l       : HIGH/LOW sesiunea NY DIN ZIUA PRECEDENTA (complet fixe)
-// prev_4h_h/l       : HIGH/LOW prima 4H NY DIN ZIUA PRECEDENTA (complet fixe)
+// day_h / day_l     : high/low acumulat de la 00:00 (fix din 16:00 pentru sesiunea de trading)
+// prev_ny_h/l       : HIGH/LOW sesiunea NY DIN ZIUA PRECEDENTA - complet fixe
+// prev_4h_h/l       : HIGH/LOW prima 4H NY DIN ZIUA PRECEDENTA - complet fixe
 // ================================================================================
 var float day_h     = na
 var float day_l     = na
@@ -243,8 +241,11 @@ if trade_ended
 
 // ================================================================================
 // LINII ORIZONTALE FIXE (line.new + extend.right)
-// Toate nivelurile sunt drepte - nu se misca niciodata dupa pret
-// Sterse si recreate la fiecare noua sesiune PVP
+//
+// IMPORTANT: liniile se STERG la pvp_ended (16:00), NU la pvp_started (12:00)
+// Astfel, liniile din ziua precedenta raman vizibile in toata sesiunea PVP
+// (12:00-16:00), adica cel putin 4 ore inainte de sesiunea de trading.
+// Utilizatorul vede nivelurile de referinta cu mult inainte de 16:00.
 // ================================================================================
 var line ln_vah  = na
 var line ln_val  = na
@@ -257,7 +258,9 @@ var line ln_nyl  = na
 var line ln_4hh  = na
 var line ln_4hl  = na
 
-if pvp_started
+// La 16:00 (pvp_ended): sterge liniile vechi, deseneaza liniile noi
+// Liniile de ieri sunt vizibile toata sesiunea PVP (12:00-16:00)
+if pvp_ended
     line.delete(ln_vah)
     line.delete(ln_val)
     line.delete(ln_poc)
@@ -278,22 +281,19 @@ if pvp_started
     ln_nyl  := na
     ln_4hh  := na
     ln_4hl  := na
-
-// La 16:00 (pvp_ended) cream toate liniile fixe
-if pvp_ended
     x = bar_index
     if not na(vah)
-        ln_vah  := line.new(x, vah,      x + 1, vah,      extend=extend.right, color=i_col_vah,  width=2, style=line.style_solid)
+        ln_vah  := line.new(x, vah,       x + 1, vah,       extend=extend.right, color=i_col_vah,  width=2, style=line.style_solid)
     if not na(val_l)
-        ln_val  := line.new(x, val_l,    x + 1, val_l,    extend=extend.right, color=i_col_val,  width=2, style=line.style_solid)
+        ln_val  := line.new(x, val_l,     x + 1, val_l,     extend=extend.right, color=i_col_val,  width=2, style=line.style_solid)
     if not na(poc_)
-        ln_poc  := line.new(x, poc_,     x + 1, poc_,     extend=extend.right, color=i_col_poc,  width=1, style=line.style_dashed)
+        ln_poc  := line.new(x, poc_,      x + 1, poc_,      extend=extend.right, color=i_col_poc,  width=1, style=line.style_dashed)
     if not na(pvp_vwap)
-        ln_vwap := line.new(x, pvp_vwap, x + 1, pvp_vwap, extend=extend.right, color=i_col_vwap, width=2, style=line.style_solid)
+        ln_vwap := line.new(x, pvp_vwap,  x + 1, pvp_vwap,  extend=extend.right, color=i_col_vwap, width=2, style=line.style_solid)
     if not na(day_h)
-        ln_dh   := line.new(x, day_h,    x + 1, day_h,    extend=extend.right, color=i_col_dhl,  width=1, style=line.style_solid)
+        ln_dh   := line.new(x, day_h,     x + 1, day_h,     extend=extend.right, color=i_col_dhl,  width=1, style=line.style_solid)
     if not na(day_l)
-        ln_dl   := line.new(x, day_l,    x + 1, day_l,    extend=extend.right, color=i_col_dhl,  width=1, style=line.style_solid)
+        ln_dl   := line.new(x, day_l,     x + 1, day_l,     extend=extend.right, color=i_col_dhl,  width=1, style=line.style_solid)
     if not na(prev_ny_h)
         ln_nyh  := line.new(x, prev_ny_h, x + 1, prev_ny_h, extend=extend.right, color=i_col_nyhl, width=1, style=line.style_solid)
     if not na(prev_ny_l)
@@ -307,6 +307,8 @@ if pvp_ended
 // PLOTS (doar VWAP live in PVP si semnale)
 // ================================================================================
 bgcolor(is_trade ? i_col_sess : na, title="Sesiune Trading")
+
+// VWAP live (curba) doar in sesiunea PVP 12:00-16:00
 plot(is_pvp ? running_vwap : na, "VWAP live PVP", color=color.new(i_col_vwap, 50), linewidth=1)
 
 plotshape(bull_mss,  "MSS Bullish",  shape.triangleup,   location.belowbar, color.lime,    size=size.tiny,   text="MSS^")
@@ -315,9 +317,9 @@ plotshape(long_ok,   "LONG Signal",  shape.labelup,      location.belowbar, colo
 plotshape(short_ok,  "SHORT Signal", shape.labeldown,    location.abovebar, color.red,     size=size.normal, text="SHORT", textcolor=color.white)
 
 // ================================================================================
-// ETICHETE INLINE (text discret pe linie, fara box, la ora 18:00)
+// ETICHETE INLINE pe linii la ora 18:00 (text discret fara box)
 // VAH  = Value Area High       | VAL  = Value Area Low
-// POC  = Point of Control      | VWAP = VWAP sesiune PVP
+// POC  = Point of Control      | VWAP = VWAP sesiune PVP 12:00-16:00
 // D.H  = Daily High (la 16:00) | D.L  = Daily Low (la 16:00)
 // NY.H = NY High ziua PREV     | NY.L = NY Low ziua PREV
 // 4H.H = Prima 4H NY High PREV | 4H.L = Prima 4H NY Low PREV
