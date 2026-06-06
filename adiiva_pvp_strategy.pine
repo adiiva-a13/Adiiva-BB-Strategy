@@ -173,28 +173,42 @@ if ny4h_ended
 
 // ================================================================================
 // MSS DETECTION
+//
+// Valid HIGH = urmat de minim 2 lumanari bearish consecutive
+// Valid LOW  = urmat de minim 2 lumanari bullish consecutive
+//
+// SL pentru LONG  = low-ul celor 2 lumanari bearish care au format pullback-ul
+//                   (ultimul low inainte de BULL MSS)
+// SL pentru SHORT = high-ul celor 2 lumanari bullish care au format pullback-ul
+//                   (ultimul high inainte de BEAR MSS)
 // ================================================================================
 bear_seq = (close < open) and (close[1] < open[1])
 bull_seq = (close > open) and (close[1] > open[1])
 
-var float tracked_sh = na
-var float tracked_sl = na
+var float tracked_sh  = na
+var float tracked_sl  = na
+var float bear_seq_sl = na  // low pullback bearish → SL pentru LONG
+var float bull_seq_sh = na  // high pullback bullish → SL pentru SHORT
 
 if bear_seq
-    tracked_sh := math.max(high[2], high[3])
+    tracked_sh  := math.max(high[2], high[3])
+    bear_seq_sl := math.min(low[0], low[1])
 if bull_seq
-    tracked_sl := math.min(low[2], low[3])
+    tracked_sl  := math.min(low[2], low[3])
+    bull_seq_sh := math.max(high[0], high[1])
 
 bull_mss = not na(tracked_sh) and close > tracked_sh and close[1] <= tracked_sh
 bear_mss = not na(tracked_sl) and close < tracked_sl and close[1] >= tracked_sl
 
-bull_mss_sl = tracked_sl
-bear_mss_sl = tracked_sh
+bull_mss_sl = bear_seq_sl
+bear_mss_sl = bull_seq_sh
 
 if bull_mss
-    tracked_sh := na
+    tracked_sh  := na
+    bear_seq_sl := na
 if bear_mss
-    tracked_sl := na
+    tracked_sl  := na
+    bull_seq_sh := na
 
 // ================================================================================
 // STRATEGY LOGIC
@@ -222,7 +236,8 @@ if long_ok
     strategy.entry("LONG", strategy.long)
     strategy.exit("LONG_X", "LONG", stop=sl_price, limit=close + sl_dist * i_rr)
     trades_today += 1
-    tracked_sl   := na
+    tracked_sl  := na
+    bear_seq_sl := na
 
 if short_ok
     sl_price = na(bear_mss_sl) ? math.max(high[1], high[2]) : bear_mss_sl
@@ -230,7 +245,8 @@ if short_ok
     strategy.entry("SHORT", strategy.short)
     strategy.exit("SHORT_X", "SHORT", stop=sl_price, limit=close - sl_dist * i_rr)
     trades_today += 1
-    tracked_sh   := na
+    tracked_sh  := na
+    bull_seq_sh := na
 
 if trade_ended
     strategy.close_all("EOD")
