@@ -170,6 +170,11 @@ if is_ny4h
 if ny4h_ended
     prev_4h_h := ny4h_h
     prev_4h_l := ny4h_l
+    line.delete(ln_4hh)
+    line.delete(ln_4hl)
+    x4h = bar_index
+    ln_4hh := not na(prev_4h_h) ? line.new(x4h, prev_4h_h, x4h + 1, prev_4h_h, extend=extend.right, color=i_col_4hhl, width=1, style=line.style_dashed) : na
+    ln_4hl := not na(prev_4h_l) ? line.new(x4h, prev_4h_l, x4h + 1, prev_4h_l, extend=extend.right, color=i_col_4hhl, width=1, style=line.style_dashed) : na
 
 // ================================================================================
 // MSS DETECTION
@@ -274,8 +279,6 @@ if pvp_ended
     line.delete(ln_dl)
     line.delete(ln_nyh)
     line.delete(ln_nyl)
-    line.delete(ln_4hh)
-    line.delete(ln_4hl)
     ln_vah := na
     ln_val := na
     ln_poc := na
@@ -283,8 +286,6 @@ if pvp_ended
     ln_dl  := na
     ln_nyh := na
     ln_nyl := na
-    ln_4hh := na
-    ln_4hl := na
     x = bar_index
     if not na(vah)
         ln_vah := line.new(x, vah,       x + 1, vah,       extend=extend.right, color=i_col_vah,  width=2, style=line.style_solid)
@@ -300,10 +301,6 @@ if pvp_ended
         ln_nyh := line.new(x, prev_ny_h, x + 1, prev_ny_h, extend=extend.right, color=i_col_nyhl, width=1, style=line.style_solid)
     if not na(prev_ny_l)
         ln_nyl := line.new(x, prev_ny_l, x + 1, prev_ny_l, extend=extend.right, color=i_col_nyhl, width=1, style=line.style_solid)
-    if not na(prev_4h_h)
-        ln_4hh := line.new(x, prev_4h_h, x + 1, prev_4h_h, extend=extend.right, color=i_col_4hhl, width=1, style=line.style_dashed)
-    if not na(prev_4h_l)
-        ln_4hl := line.new(x, prev_4h_l, x + 1, prev_4h_l, extend=extend.right, color=i_col_4hhl, width=1, style=line.style_dashed)
 
 // ================================================================================
 // PLOTS
