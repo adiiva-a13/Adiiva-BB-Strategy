@@ -17,8 +17,8 @@ i_col_val  = input.color(color.new(color.red,     0), "VAL",                 gro
 i_col_poc  = input.color(color.new(color.orange,  0), "POC",                 group="Visual")
 i_col_vwap = input.color(color.new(color.purple,  0), "VWAP",                group="Visual")
 i_col_dhl  = input.color(color.new(color.blue,    0), "Day H/L",             group="Visual")
-i_col_nyhl = input.color(color.new(color.orange,  0), "NY Day H/L",          group="Visual")
-i_col_4hhl = input.color(color.new(color.teal,    0), "NY 4H Candle H/L",    group="Visual")
+i_col_nyhl = input.color(color.new(color.orange,  0), "NY Day H/L (prev)",   group="Visual")
+i_col_4hhl = input.color(color.new(color.teal,    0), "NY 4H H/L (prev)",    group="Visual")
 
 TZ = "Europe/Bucharest"
 
@@ -41,6 +41,8 @@ pvp_ended     = not is_pvp and is_pvp[1]
 trade_ended   = not is_trade and is_trade[1]
 ny4h_started  = is_ny4h  and not is_ny4h[1]
 nyday_started = is_nyday and not is_nyday[1]
+ny4h_ended    = not is_ny4h  and is_ny4h[1]
+nyday_ended   = not is_nyday and is_nyday[1]
 
 // ================================================================================
 // VOLUME PROFILE - sesiunea PVP 12:00-16:00 RO
@@ -128,13 +130,22 @@ running_vwap = _vsum > 0.0 ? _wpsum / _vsum : na
 
 // ================================================================================
 // HIGH / LOW LEVELS
+// day_h / day_l     : high/low de la miezul noptii pana la 16:00 (fixe din 16:00)
+// ny_day_h/l        : acumulate in sesiunea NY curenta (16:30-23:00)
+// ny4h_h/l          : acumulate in prima lumanare 4H NY (16:30-20:30)
+// prev_ny_h/l       : HIGH/LOW sesiunea NY DIN ZIUA PRECEDENTA (complet fixe)
+// prev_4h_h/l       : HIGH/LOW prima 4H NY DIN ZIUA PRECEDENTA (complet fixe)
 // ================================================================================
-var float day_h    = na
-var float day_l    = na
-var float ny_day_h = na
-var float ny_day_l = na
-var float ny4h_h   = na
-var float ny4h_l   = na
+var float day_h     = na
+var float day_l     = na
+var float ny_day_h  = na
+var float ny_day_l  = na
+var float ny4h_h    = na
+var float ny4h_l    = na
+var float prev_ny_h = na
+var float prev_ny_l = na
+var float prev_4h_h = na
+var float prev_4h_l = na
 
 new_day = dayofmonth != dayofmonth[1]
 
@@ -150,6 +161,9 @@ if nyday_started
 if is_nyday
     ny_day_h := math.max(ny_day_h, high)
     ny_day_l := math.min(ny_day_l, low)
+if nyday_ended
+    prev_ny_h := ny_day_h
+    prev_ny_l := ny_day_l
 
 if ny4h_started
     ny4h_h := high
@@ -157,6 +171,9 @@ if ny4h_started
 if is_ny4h
     ny4h_h := math.max(ny4h_h, high)
     ny4h_l := math.min(ny4h_l, low)
+if ny4h_ended
+    prev_4h_h := ny4h_h
+    prev_4h_l := ny4h_l
 
 // ================================================================================
 // MSS DETECTION
@@ -173,7 +190,6 @@ var float tracked_sl = na
 
 if bear_seq
     tracked_sh := math.max(high[2], high[3])
-
 if bull_seq
     tracked_sl := math.min(low[2], low[3])
 
@@ -203,9 +219,8 @@ if strategy.closedtrades > strategy.closedtrades[1]
 
 trade_limit_ok = trades_today < 2 and (trades_today == 0 or (trades_today == 1 and last_was_sl))
 can_enter      = is_entry and strategy.opentrades == 0 and trade_limit_ok
-
-long_ok  = can_enter and not na(vah)   and not na(pvp_vwap) and close > vah   and close > pvp_vwap and bull_mss
-short_ok = can_enter and not na(val_l) and not na(pvp_vwap) and close < val_l and close < pvp_vwap and bear_mss
+long_ok        = can_enter and not na(vah) and not na(pvp_vwap) and close > vah and close > pvp_vwap and bull_mss
+short_ok       = can_enter and not na(val_l) and not na(pvp_vwap) and close < val_l and close < pvp_vwap and bear_mss
 
 if long_ok
     sl_price = na(bull_mss_sl) ? math.min(low[1], low[2]) : bull_mss_sl
@@ -227,22 +242,72 @@ if trade_ended
     strategy.close_all("EOD")
 
 // ================================================================================
-// PLOTS
+// LINII ORIZONTALE FIXE (line.new + extend.right)
+// Toate nivelurile sunt drepte - nu se misca niciodata dupa pret
+// Sterse si recreate la fiecare noua sesiune PVP
+// ================================================================================
+var line ln_vah  = na
+var line ln_val  = na
+var line ln_poc  = na
+var line ln_vwap = na
+var line ln_dh   = na
+var line ln_dl   = na
+var line ln_nyh  = na
+var line ln_nyl  = na
+var line ln_4hh  = na
+var line ln_4hl  = na
+
+if pvp_started
+    line.delete(ln_vah)
+    line.delete(ln_val)
+    line.delete(ln_poc)
+    line.delete(ln_vwap)
+    line.delete(ln_dh)
+    line.delete(ln_dl)
+    line.delete(ln_nyh)
+    line.delete(ln_nyl)
+    line.delete(ln_4hh)
+    line.delete(ln_4hl)
+    ln_vah  := na
+    ln_val  := na
+    ln_poc  := na
+    ln_vwap := na
+    ln_dh   := na
+    ln_dl   := na
+    ln_nyh  := na
+    ln_nyl  := na
+    ln_4hh  := na
+    ln_4hl  := na
+
+// La 16:00 (pvp_ended) cream toate liniile fixe
+if pvp_ended
+    x = bar_index
+    if not na(vah)
+        ln_vah  := line.new(x, vah,      x + 1, vah,      extend=extend.right, color=i_col_vah,  width=2, style=line.style_solid)
+    if not na(val_l)
+        ln_val  := line.new(x, val_l,    x + 1, val_l,    extend=extend.right, color=i_col_val,  width=2, style=line.style_solid)
+    if not na(poc_)
+        ln_poc  := line.new(x, poc_,     x + 1, poc_,     extend=extend.right, color=i_col_poc,  width=1, style=line.style_dashed)
+    if not na(pvp_vwap)
+        ln_vwap := line.new(x, pvp_vwap, x + 1, pvp_vwap, extend=extend.right, color=i_col_vwap, width=2, style=line.style_solid)
+    if not na(day_h)
+        ln_dh   := line.new(x, day_h,    x + 1, day_h,    extend=extend.right, color=i_col_dhl,  width=1, style=line.style_solid)
+    if not na(day_l)
+        ln_dl   := line.new(x, day_l,    x + 1, day_l,    extend=extend.right, color=i_col_dhl,  width=1, style=line.style_solid)
+    if not na(prev_ny_h)
+        ln_nyh  := line.new(x, prev_ny_h, x + 1, prev_ny_h, extend=extend.right, color=i_col_nyhl, width=1, style=line.style_solid)
+    if not na(prev_ny_l)
+        ln_nyl  := line.new(x, prev_ny_l, x + 1, prev_ny_l, extend=extend.right, color=i_col_nyhl, width=1, style=line.style_solid)
+    if not na(prev_4h_h)
+        ln_4hh  := line.new(x, prev_4h_h, x + 1, prev_4h_h, extend=extend.right, color=i_col_4hhl, width=1, style=line.style_dashed)
+    if not na(prev_4h_l)
+        ln_4hl  := line.new(x, prev_4h_l, x + 1, prev_4h_l, extend=extend.right, color=i_col_4hhl, width=1, style=line.style_dashed)
+
+// ================================================================================
+// PLOTS (doar VWAP live in PVP si semnale)
 // ================================================================================
 bgcolor(is_trade ? i_col_sess : na, title="Sesiune Trading")
-
-plot(is_pvp   ? running_vwap : na, "VWAP live PVP", color=color.new(i_col_vwap, 50), linewidth=1)
-plot(is_trade ? pvp_vwap     : na, "VWAP",          color=i_col_vwap,                linewidth=2)
-plot(is_trade ? vah          : na, "VAH",            color=i_col_vah,                 linewidth=2)
-plot(is_trade ? val_l        : na, "VAL",            color=i_col_val,                 linewidth=2)
-plot(is_trade ? poc_         : na, "POC",            color=i_col_poc,                 linewidth=1, style=plot.style_cross)
-
-plot(day_h,    "Day High",    color=i_col_dhl,  linewidth=1)
-plot(day_l,    "Day Low",     color=i_col_dhl,  linewidth=1)
-plot(ny_day_h, "NY Day High", color=i_col_nyhl, linewidth=1, style=plot.style_linebr)
-plot(ny_day_l, "NY Day Low",  color=i_col_nyhl, linewidth=1, style=plot.style_linebr)
-plot(ny4h_h,   "NY 4H High",  color=i_col_4hhl, linewidth=1, style=plot.style_stepline)
-plot(ny4h_l,   "NY 4H Low",   color=i_col_4hhl, linewidth=1, style=plot.style_stepline)
+plot(is_pvp ? running_vwap : na, "VWAP live PVP", color=color.new(i_col_vwap, 50), linewidth=1)
 
 plotshape(bull_mss,  "MSS Bullish",  shape.triangleup,   location.belowbar, color.lime,    size=size.tiny,   text="MSS^")
 plotshape(bear_mss,  "MSS Bearish",  shape.triangledown, location.abovebar, color.fuchsia, size=size.tiny,   text="MSSv")
@@ -250,48 +315,39 @@ plotshape(long_ok,   "LONG Signal",  shape.labelup,      location.belowbar, colo
 plotshape(short_ok,  "SHORT Signal", shape.labeldown,    location.abovebar, color.red,     size=size.normal, text="SHORT", textcolor=color.white)
 
 // ================================================================================
-// ETICHETE INLINE PE LINII
-// Text discret direct pe linie, fara box, la ora ~18:00 (mijlocul sesiunii)
-//
-// Legenda:
-//   VAH   = Value Area High  (limita sus a zonei de valoare)
-//   VAL   = Value Area Low   (limita jos a zonei de valoare)
-//   POC   = Point of Control (pret cu volum maxim)
-//   VWAP  = VWAP sesiune PVP (12:00-16:00)
-//   D.H   = Daily High  (maximul zilei de la 00:00)
-//   D.L   = Daily Low   (minimul zilei de la 00:00)
-//   NY.H  = NY Session High  (maxim de la 16:30 RO)
-//   NY.L  = NY Session Low   (minim  de la 16:30 RO)
-//   4H.H  = High prima lumanare 4H NY (16:30-20:30 RO)
-//   4H.L  = Low  prima lumanare 4H NY (16:30-20:30 RO)
+// ETICHETE INLINE (text discret pe linie, fara box, la ora 18:00)
+// VAH  = Value Area High       | VAL  = Value Area Low
+// POC  = Point of Control      | VWAP = VWAP sesiune PVP
+// D.H  = Daily High (la 16:00) | D.L  = Daily Low (la 16:00)
+// NY.H = NY High ziua PREV     | NY.L = NY Low ziua PREV
+// 4H.H = Prima 4H NY High PREV | 4H.L = Prima 4H NY Low PREV
 // ================================================================================
 var bool lbl_drawn = false
 if pvp_started
     lbl_drawn := false
 
-// Deseneaza o singura data per zi cand ajungem la ora 18:00 (mijlocul sesiunii)
 if is_trade and not lbl_drawn and hour(time, TZ) >= 18
     lbl_drawn := true
     if not na(vah)
-        label.new(bar_index, vah,      "VAH",  style=label.style_none, textcolor=i_col_vah,  size=size.small)
+        label.new(bar_index, vah,       "VAH",  style=label.style_none, textcolor=i_col_vah,  size=size.small)
     if not na(val_l)
-        label.new(bar_index, val_l,    "VAL",  style=label.style_none, textcolor=i_col_val,  size=size.small)
+        label.new(bar_index, val_l,     "VAL",  style=label.style_none, textcolor=i_col_val,  size=size.small)
     if not na(poc_)
-        label.new(bar_index, poc_,     "POC",  style=label.style_none, textcolor=i_col_poc,  size=size.small)
+        label.new(bar_index, poc_,      "POC",  style=label.style_none, textcolor=i_col_poc,  size=size.small)
     if not na(pvp_vwap)
-        label.new(bar_index, pvp_vwap, "VWAP", style=label.style_none, textcolor=i_col_vwap, size=size.small)
+        label.new(bar_index, pvp_vwap,  "VWAP", style=label.style_none, textcolor=i_col_vwap, size=size.small)
     if not na(day_h)
-        label.new(bar_index, day_h,    "D.H",  style=label.style_none, textcolor=i_col_dhl,  size=size.small)
+        label.new(bar_index, day_h,     "D.H",  style=label.style_none, textcolor=i_col_dhl,  size=size.small)
     if not na(day_l)
-        label.new(bar_index, day_l,    "D.L",  style=label.style_none, textcolor=i_col_dhl,  size=size.small)
-    if not na(ny_day_h)
-        label.new(bar_index, ny_day_h, "NY.H", style=label.style_none, textcolor=i_col_nyhl, size=size.small)
-    if not na(ny_day_l)
-        label.new(bar_index, ny_day_l, "NY.L", style=label.style_none, textcolor=i_col_nyhl, size=size.small)
-    if not na(ny4h_h)
-        label.new(bar_index, ny4h_h,   "4H.H", style=label.style_none, textcolor=i_col_4hhl, size=size.small)
-    if not na(ny4h_l)
-        label.new(bar_index, ny4h_l,   "4H.L", style=label.style_none, textcolor=i_col_4hhl, size=size.small)
+        label.new(bar_index, day_l,     "D.L",  style=label.style_none, textcolor=i_col_dhl,  size=size.small)
+    if not na(prev_ny_h)
+        label.new(bar_index, prev_ny_h, "NY.H", style=label.style_none, textcolor=i_col_nyhl, size=size.small)
+    if not na(prev_ny_l)
+        label.new(bar_index, prev_ny_l, "NY.L", style=label.style_none, textcolor=i_col_nyhl, size=size.small)
+    if not na(prev_4h_h)
+        label.new(bar_index, prev_4h_h, "4H.H", style=label.style_none, textcolor=i_col_4hhl, size=size.small)
+    if not na(prev_4h_l)
+        label.new(bar_index, prev_4h_l, "4H.L", style=label.style_none, textcolor=i_col_4hhl, size=size.small)
 
 alertcondition(long_ok,  "LONG",  "Adiiva: LONG - deasupra VAH & VWAP | Bullish MSS")
 alertcondition(short_ok, "SHORT", "Adiiva: SHORT - sub VAL & VWAP | Bearish MSS")
