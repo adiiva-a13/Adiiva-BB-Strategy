@@ -35,7 +35,7 @@ session_vwap = ta.vwap(hlc3)
 is_pvp   = not na(time(timeframe.period, "1200-1600", TZ))
 is_trade = not na(time(timeframe.period, "1600-2200", TZ))
 is_entry = not na(time(timeframe.period, "1600-1900", TZ))
-is_ny4h  = not na(time(timeframe.period, "1630-2030", TZ))
+is_ny4h  = not na(time(timeframe.period, "0700-1100", TZ))
 is_nyday = not na(time(timeframe.period, "1630-2300", TZ))
 
 pvp_started   = is_pvp   and not is_pvp[1]
