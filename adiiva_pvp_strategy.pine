@@ -16,7 +16,6 @@ i_col_vah  = input.color(color.new(color.lime,    0), "VAH",                 gro
 i_col_val  = input.color(color.new(color.red,     0), "VAL",                 group="Visual")
 i_col_poc  = input.color(color.new(color.orange,  0), "POC",                 group="Visual")
 i_col_vwap = input.color(color.new(color.white,   0), "VWAP (Session)",      group="Visual")
-i_col_dhl  = input.color(color.new(color.blue,    0), "Day H/L",             group="Visual")
 i_col_nyhl = input.color(color.new(color.orange,  0), "NY Day H/L (prev)",   group="Visual")
 i_col_4hhl = input.color(color.new(color.teal,    0), "NY 4H H/L (prev)",    group="Visual")
 
@@ -132,15 +131,9 @@ if pvp_ended and _vsum > 0.0
 // ================================================================================
 var line ln_4hh = na
 var line ln_4hl = na
-var line ln_dh  = na
-var line ln_dl  = na
 var line ln_nyh = na
 var line ln_nyl = na
 
-var float day_h      = na
-var float day_l      = na
-var float prev_day_h = na
-var float prev_day_l = na
 var float ny_cal_h   = na
 var float ny_cal_l   = na
 var float ny4h_h     = na
@@ -150,22 +143,7 @@ var float prev_ny_l  = na
 var float prev_4h_h  = na
 var float prev_4h_l  = na
 
-new_day = dayofmonth(time, TZ) != dayofmonth(time[1], TZ)
-if new_day
-    prev_day_h := day_h
-    prev_day_l := day_l
-    line.delete(ln_dh)
-    line.delete(ln_dl)
-    xd = bar_index
-    ln_dh := not na(prev_day_h) ? line.new(xd, prev_day_h, xd + 1, prev_day_h, extend=extend.right, color=i_col_dhl, width=1, style=line.style_solid) : na
-    ln_dl := not na(prev_day_l) ? line.new(xd, prev_day_l, xd + 1, prev_day_l, extend=extend.right, color=i_col_dhl, width=1, style=line.style_solid) : na
-    day_h := high
-    day_l := low
-if bar_index == 0
-    day_h := high
-    day_l := low
-day_h := math.max(day_h, high)
-day_l := math.min(day_l, low)
+
 
 // NY calendar day: 00:00-24:00 NY = 07:00-07:00 RO, resetat la ny4h_started
 if ny4h_started
@@ -332,10 +310,7 @@ if is_trade and not lbl_drawn and hour(time, TZ) >= 18
         label.new(bar_index, val_l,     "VAL",  style=label.style_none, textcolor=i_col_val,  size=size.small)
     if not na(poc_)
         label.new(bar_index, poc_,      "POC",  style=label.style_none, textcolor=i_col_poc,  size=size.small)
-    if not na(prev_day_h)
-        label.new(bar_index, prev_day_h, "D.H", style=label.style_none, textcolor=i_col_dhl,  size=size.small)
-    if not na(prev_day_l)
-        label.new(bar_index, prev_day_l, "D.L", style=label.style_none, textcolor=i_col_dhl,  size=size.small)
+
     if not na(prev_ny_h)
         label.new(bar_index, prev_ny_h, "NY.H", style=label.style_none, textcolor=i_col_nyhl, size=size.small)
     if not na(prev_ny_l)
