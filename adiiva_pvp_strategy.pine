@@ -36,15 +36,12 @@ is_pvp   = not na(time(timeframe.period, "1200-1600", TZ))
 is_trade = not na(time(timeframe.period, "1600-2200", TZ))
 is_entry = not na(time(timeframe.period, "1600-1900", TZ))
 is_ny4h  = not na(time(timeframe.period, "0700-1100", TZ))
-is_nyday = not na(time(timeframe.period, "1630-2300", TZ))
 
-pvp_started   = is_pvp   and not is_pvp[1]
-pvp_ended     = not is_pvp and is_pvp[1]
-trade_ended   = not is_trade and is_trade[1]
-ny4h_started  = is_ny4h  and not is_ny4h[1]
-nyday_started = is_nyday and not is_nyday[1]
-ny4h_ended    = not is_ny4h  and is_ny4h[1]
-nyday_ended   = not is_nyday and is_nyday[1]
+pvp_started  = is_pvp  and not is_pvp[1]
+pvp_ended    = not is_pvp  and is_pvp[1]
+trade_ended  = not is_trade and is_trade[1]
+ny4h_started = is_ny4h and not is_ny4h[1]
+ny4h_ended   = not is_ny4h and is_ny4h[1]
 
 // ================================================================================
 // VOLUME PROFILE - sesiunea PVP 12:00-16:00 RO
@@ -137,19 +134,21 @@ var line ln_4hh = na
 var line ln_4hl = na
 var line ln_dh  = na
 var line ln_dl  = na
+var line ln_nyh = na
+var line ln_nyl = na
 
 var float day_h      = na
 var float day_l      = na
 var float prev_day_h = na
 var float prev_day_l = na
-var float ny_day_h  = na
-var float ny_day_l  = na
-var float ny4h_h    = na
-var float ny4h_l    = na
-var float prev_ny_h = na
-var float prev_ny_l = na
-var float prev_4h_h = na
-var float prev_4h_l = na
+var float ny_cal_h   = na
+var float ny_cal_l   = na
+var float ny4h_h     = na
+var float ny4h_l     = na
+var float prev_ny_h  = na
+var float prev_ny_l  = na
+var float prev_4h_h  = na
+var float prev_4h_l  = na
 
 new_day = dayofmonth != dayofmonth[1]
 if new_day
@@ -168,19 +167,22 @@ if bar_index == 0
 day_h := math.max(day_h, high)
 day_l := math.min(day_l, low)
 
-if nyday_started
-    ny_day_h := high
-    ny_day_l := low
-if is_nyday
-    ny_day_h := math.max(ny_day_h, high)
-    ny_day_l := math.min(ny_day_l, low)
-if nyday_ended
-    prev_ny_h := ny_day_h
-    prev_ny_l := ny_day_l
-
+// NY calendar day: 00:00-24:00 NY = 07:00-07:00 RO, resetat la ny4h_started
 if ny4h_started
+    prev_ny_h  := ny_cal_h
+    prev_ny_l  := ny_cal_l
+    line.delete(ln_nyh)
+    line.delete(ln_nyl)
+    xny = bar_index
+    ln_nyh := not na(prev_ny_h) ? line.new(xny, prev_ny_h, xny + 1, prev_ny_h, extend=extend.right, color=i_col_nyhl, width=1, style=line.style_solid) : na
+    ln_nyl := not na(prev_ny_l) ? line.new(xny, prev_ny_l, xny + 1, prev_ny_l, extend=extend.right, color=i_col_nyhl, width=1, style=line.style_solid) : na
+    ny_cal_h := high
+    ny_cal_l := low
     ny4h_h := high
     ny4h_l := low
+ny_cal_h := math.max(ny_cal_h, high)
+ny_cal_l := math.min(ny_cal_l, low)
+
 if is_ny4h
     ny4h_h := math.max(ny4h_h, high)
     ny4h_l := math.min(ny4h_l, low)
@@ -281,31 +283,21 @@ if trade_ended
 var line ln_vah = na
 var line ln_val = na
 var line ln_poc = na
-var line ln_nyh = na
-var line ln_nyl = na
 
 if pvp_ended
     line.delete(ln_vah)
     line.delete(ln_val)
     line.delete(ln_poc)
-    line.delete(ln_nyh)
-    line.delete(ln_nyl)
     ln_vah := na
     ln_val := na
     ln_poc := na
-    ln_nyh := na
-    ln_nyl := na
     x = bar_index
     if not na(vah)
-        ln_vah := line.new(x, vah,       x + 1, vah,       extend=extend.right, color=i_col_vah,  width=2, style=line.style_solid)
+        ln_vah := line.new(x, vah,   x + 1, vah,   extend=extend.right, color=i_col_vah, width=2, style=line.style_solid)
     if not na(val_l)
-        ln_val := line.new(x, val_l,     x + 1, val_l,     extend=extend.right, color=i_col_val,  width=2, style=line.style_solid)
+        ln_val := line.new(x, val_l, x + 1, val_l, extend=extend.right, color=i_col_val, width=2, style=line.style_solid)
     if not na(poc_)
-        ln_poc := line.new(x, poc_,      x + 1, poc_,      extend=extend.right, color=i_col_poc,  width=1, style=line.style_dashed)
-    if not na(prev_ny_h)
-        ln_nyh := line.new(x, prev_ny_h, x + 1, prev_ny_h, extend=extend.right, color=i_col_nyhl, width=1, style=line.style_solid)
-    if not na(prev_ny_l)
-        ln_nyl := line.new(x, prev_ny_l, x + 1, prev_ny_l, extend=extend.right, color=i_col_nyhl, width=1, style=line.style_solid)
+        ln_poc := line.new(x, poc_,  x + 1, poc_,  extend=extend.right, color=i_col_poc, width=1, style=line.style_dashed)
 
 // ================================================================================
 // PLOTS
