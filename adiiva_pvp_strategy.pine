@@ -133,6 +133,9 @@ if pvp_ended and _vsum > 0.0
 // ================================================================================
 // HIGH / LOW LEVELS
 // ================================================================================
+var line ln_4hh = na
+var line ln_4hl = na
+
 var float day_h     = na
 var float day_l     = na
 var float ny_day_h  = na
@@ -268,8 +271,6 @@ var line ln_dh  = na
 var line ln_dl  = na
 var line ln_nyh = na
 var line ln_nyl = na
-var line ln_4hh = na
-var line ln_4hl = na
 
 if pvp_ended
     line.delete(ln_vah)
