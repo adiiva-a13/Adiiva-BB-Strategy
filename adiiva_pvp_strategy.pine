@@ -136,8 +136,10 @@ if pvp_ended and _vsum > 0.0
 var line ln_4hh = na
 var line ln_4hl = na
 
-var float day_h     = na
-var float day_l     = na
+var float day_h      = na
+var float day_l      = na
+var float snap_day_h = na
+var float snap_day_l = na
 var float ny_day_h  = na
 var float ny_day_l  = na
 var float ny4h_h    = na
@@ -287,6 +289,8 @@ if pvp_ended
     ln_dl  := na
     ln_nyh := na
     ln_nyl := na
+    snap_day_h := day_h
+    snap_day_l := day_l
     x = bar_index
     if not na(vah)
         ln_vah := line.new(x, vah,       x + 1, vah,       extend=extend.right, color=i_col_vah,  width=2, style=line.style_solid)
@@ -336,10 +340,10 @@ if is_trade and not lbl_drawn and hour(time, TZ) >= 18
         label.new(bar_index, val_l,     "VAL",  style=label.style_none, textcolor=i_col_val,  size=size.small)
     if not na(poc_)
         label.new(bar_index, poc_,      "POC",  style=label.style_none, textcolor=i_col_poc,  size=size.small)
-    if not na(day_h)
-        label.new(bar_index, day_h,     "D.H",  style=label.style_none, textcolor=i_col_dhl,  size=size.small)
-    if not na(day_l)
-        label.new(bar_index, day_l,     "D.L",  style=label.style_none, textcolor=i_col_dhl,  size=size.small)
+    if not na(snap_day_h)
+        label.new(bar_index, snap_day_h, "D.H", style=label.style_none, textcolor=i_col_dhl,  size=size.small)
+    if not na(snap_day_l)
+        label.new(bar_index, snap_day_l, "D.L", style=label.style_none, textcolor=i_col_dhl,  size=size.small)
     if not na(prev_ny_h)
         label.new(bar_index, prev_ny_h, "NY.H", style=label.style_none, textcolor=i_col_nyhl, size=size.small)
     if not na(prev_ny_l)
