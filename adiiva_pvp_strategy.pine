@@ -150,7 +150,7 @@ var float prev_ny_l  = na
 var float prev_4h_h  = na
 var float prev_4h_l  = na
 
-new_day = dayofmonth != dayofmonth[1]
+new_day = dayofmonth(time, TZ) != dayofmonth(time[1], TZ)
 if new_day
     prev_day_h := day_h
     prev_day_l := day_l
