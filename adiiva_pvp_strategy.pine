@@ -7,9 +7,9 @@ strategy("Adiiva PVP Strategy", overlay=true, max_bars_back=1000,
 // ================================================================================
 // INPUTS
 // ================================================================================
-i_row_size = input.float(500.0, "Row Size",     minval=1,             group="Volume Profile (PVP)")
-i_va_pct   = input.float(68.0,  "Value Area %", minval=1, maxval=100, group="Volume Profile (PVP)") / 100.0
-i_rr       = input.float(1.5,   "RR Ratio",     minval=0.1, step=0.1, group="Strategy")
+i_num_rows = input.int(500,  "Number of Rows", minval=10, maxval=2000, group="Volume Profile (PVP)")
+i_va_pct   = input.float(68.0, "Value Area %", minval=1, maxval=100,  group="Volume Profile (PVP)") / 100.0
+i_rr       = input.float(1.5,  "RR Ratio",     minval=0.1, step=0.1,  group="Strategy")
 
 i_col_sess = input.color(color.new(color.blue,   88), "Trading Session BG",  group="Visual")
 i_col_vah  = input.color(color.new(color.lime,    0), "VAH",                 group="Visual")
@@ -46,6 +46,10 @@ nyday_ended   = not is_nyday and is_nyday[1]
 
 // ================================================================================
 // VOLUME PROFILE - sesiunea PVP 12:00-16:00 RO
+//
+// CORECTIE: i_num_rows = NUMARUL de randuri (ex: 500 randuri)
+// pretul per rand = (session_high - session_low) / num_rows
+// Identic cu TradingView PVP: Rows Layout=Number of Rows, Row Size=500
 // ================================================================================
 var float[] _bh      = array.new_float(0)
 var float[] _bl      = array.new_float(0)
@@ -77,62 +81,72 @@ if pvp_ended and _vsum > 0.0
     s_hi = array.max(_bh)
     s_lo = array.min(_bl)
     rng  = s_hi - s_lo
-    nr   = math.max(1, int(math.ceil(rng / i_row_size)))
-    rv   = array.new_float(nr, 0.0)
-    for i = 0 to n - 1
-        bh_ = array.get(_bh, i)
-        bl_ = array.get(_bl, i)
-        bv_ = array.get(_bv, i)
-        ri0 = int(math.max(0.0,         math.floor((bl_ - s_lo) / i_row_size)))
-        ri1 = int(math.min(float(nr-1), math.floor((bh_ - s_lo) / i_row_size)))
-        sp  = ri1 - ri0 + 1
-        if sp > 0
-            vpr = bv_ / float(sp)
-            for r = ri0 to ri1
-                array.set(rv, r, array.get(rv, r) + vpr)
-    poc_idx = 0
-    maxv    = 0.0
-    for r = 0 to nr - 1
-        v = array.get(rv, r)
-        if v > maxv
-            maxv    := v
-            poc_idx := r
-    poc_ := s_lo + (float(poc_idx) + 0.5) * i_row_size
-    totv = array.sum(rv)
-    tgtv = totv * i_va_pct
-    accv = maxv
-    lo_i = poc_idx
-    hi_i = poc_idx
-    while accv < tgtv
-        cdn = lo_i > 0
-        cup = hi_i < nr - 1
-        if not cdn and not cup
-            break
-        if cdn and cup
-            dv = array.get(rv, lo_i - 1)
-            uv = array.get(rv, hi_i + 1)
-            if dv >= uv
+
+    // nr = NUMARUL de randuri (fix, ca in TradingView)
+    // row_px = pretul acoperit de fiecare rand
+    nr     = i_num_rows
+    row_px = rng / float(nr)
+
+    if row_px > 0.0
+        rv = array.new_float(nr, 0.0)
+        for i = 0 to n - 1
+            bh_ = array.get(_bh, i)
+            bl_ = array.get(_bl, i)
+            bv_ = array.get(_bv, i)
+            ri0 = int(math.max(0.0,           math.floor((bl_ - s_lo) / row_px)))
+            ri1 = int(math.min(float(nr - 1), math.floor((bh_ - s_lo) / row_px)))
+            sp  = ri1 - ri0 + 1
+            if sp > 0
+                vpr = bv_ / float(sp)
+                for r = ri0 to ri1
+                    array.set(rv, r, array.get(rv, r) + vpr)
+
+        // POC - randul cu cel mai mare volum
+        poc_idx = 0
+        maxv    = 0.0
+        for r = 0 to nr - 1
+            v = array.get(rv, r)
+            if v > maxv
+                maxv    := v
+                poc_idx := r
+        poc_ := s_lo + (float(poc_idx) + 0.5) * row_px
+
+        // Value Area - extinde de la POC pana la 68%
+        totv = array.sum(rv)
+        tgtv = totv * i_va_pct
+        accv = maxv
+        lo_i = poc_idx
+        hi_i = poc_idx
+        while accv < tgtv
+            cdn = lo_i > 0
+            cup = hi_i < nr - 1
+            if not cdn and not cup
+                break
+            if cdn and cup
+                dv = array.get(rv, lo_i - 1)
+                uv = array.get(rv, hi_i + 1)
+                if dv >= uv
+                    lo_i -= 1
+                    accv += dv
+                else
+                    hi_i += 1
+                    accv += uv
+            else if cdn
                 lo_i -= 1
-                accv += dv
+                accv += array.get(rv, lo_i)
             else
                 hi_i += 1
-                accv += uv
-        else if cdn
-            lo_i -= 1
-            accv += array.get(rv, lo_i)
-        else
-            hi_i += 1
-            accv += array.get(rv, hi_i)
-    val_l := s_lo + float(lo_i) * i_row_size
-    vah   := s_lo + float(hi_i + 1) * i_row_size
+                accv += array.get(rv, hi_i)
+        val_l := s_lo + float(lo_i) * row_px
+        vah   := s_lo + float(hi_i + 1) * row_px
 
 running_vwap = _vsum > 0.0 ? _wpsum / _vsum : na
 
 // ================================================================================
 // HIGH / LOW LEVELS
-// day_h / day_l     : high/low acumulat de la 00:00 (fix din 16:00 pentru sesiunea de trading)
-// prev_ny_h/l       : HIGH/LOW sesiunea NY DIN ZIUA PRECEDENTA - complet fixe
-// prev_4h_h/l       : HIGH/LOW prima 4H NY DIN ZIUA PRECEDENTA - complet fixe
+// day_h / day_l  : high/low acumulat de la 00:00, fix din 16:00
+// prev_ny_h/l    : HIGH/LOW sesiunea NY DIN ZIUA PRECEDENTA
+// prev_4h_h/l    : HIGH/LOW prima 4H NY DIN ZIUA PRECEDENTA
 // ================================================================================
 var float day_h     = na
 var float day_l     = na
@@ -240,12 +254,9 @@ if trade_ended
     strategy.close_all("EOD")
 
 // ================================================================================
-// LINII ORIZONTALE FIXE (line.new + extend.right)
-//
-// IMPORTANT: liniile se STERG la pvp_ended (16:00), NU la pvp_started (12:00)
-// Astfel, liniile din ziua precedenta raman vizibile in toata sesiunea PVP
-// (12:00-16:00), adica cel putin 4 ore inainte de sesiunea de trading.
-// Utilizatorul vede nivelurile de referinta cu mult inainte de 16:00.
+// LINII ORIZONTALE FIXE
+// Sterse si recreate la pvp_ended (16:00)
+// Liniile de ieri raman vizibile toata sesiunea PVP (12:00-16:00)
 // ================================================================================
 var line ln_vah  = na
 var line ln_val  = na
@@ -258,8 +269,6 @@ var line ln_nyl  = na
 var line ln_4hh  = na
 var line ln_4hl  = na
 
-// La 16:00 (pvp_ended): sterge liniile vechi, deseneaza liniile noi
-// Liniile de ieri sunt vizibile toata sesiunea PVP (12:00-16:00)
 if pvp_ended
     line.delete(ln_vah)
     line.delete(ln_val)
@@ -304,11 +313,9 @@ if pvp_ended
         ln_4hl  := line.new(x, prev_4h_l, x + 1, prev_4h_l, extend=extend.right, color=i_col_4hhl, width=1, style=line.style_dashed)
 
 // ================================================================================
-// PLOTS (doar VWAP live in PVP si semnale)
+// PLOTS
 // ================================================================================
 bgcolor(is_trade ? i_col_sess : na, title="Sesiune Trading")
-
-// VWAP live (curba) doar in sesiunea PVP 12:00-16:00
 plot(is_pvp ? running_vwap : na, "VWAP live PVP", color=color.new(i_col_vwap, 50), linewidth=1)
 
 plotshape(bull_mss,  "MSS Bullish",  shape.triangleup,   location.belowbar, color.lime,    size=size.tiny,   text="MSS^")
@@ -317,7 +324,7 @@ plotshape(long_ok,   "LONG Signal",  shape.labelup,      location.belowbar, colo
 plotshape(short_ok,  "SHORT Signal", shape.labeldown,    location.abovebar, color.red,     size=size.normal, text="SHORT", textcolor=color.white)
 
 // ================================================================================
-// ETICHETE INLINE pe linii la ora 18:00 (text discret fara box)
+// ETICHETE INLINE la ora 18:00
 // VAH  = Value Area High       | VAL  = Value Area Low
 // POC  = Point of Control      | VWAP = VWAP sesiune PVP 12:00-16:00
 // D.H  = Daily High (la 16:00) | D.L  = Daily Low (la 16:00)
