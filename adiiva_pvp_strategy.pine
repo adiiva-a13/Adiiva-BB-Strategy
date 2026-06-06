@@ -160,17 +160,10 @@ if is_ny4h
 
 // ================================================================================
 // MSS DETECTION
-// Swing high valid : format inainte de minim 2 lumanari BEARISH consecutive
-// Swing low valid  : format inainte de minim 2 lumanari BULLISH consecutive
-//
-// La 2 bearish consecutive (bar[0]+bar[1] bearish): swing high = max(high[2], high[3])
-// La 2 bullish consecutive (bar[0]+bar[1] bullish): swing low  = min(low[2],  low[3])
-//
-// Bullish MSS : close sparge in sus tracked_sh
-// Bearish MSS : close cade sub tracked_sl
-//
-// SL LONG  = sub swing LOW care a creat MSS bullish  (tracked_sl la momentul semnalului)
-// SL SHORT = deasupra swing HIGH care a creat MSS bearish (tracked_sh la momentul semnalului)
+// Swing HIGH valid : format inainte de minim 2 lumanari BEARISH consecutive
+// Swing LOW  valid : format inainte de minim 2 lumanari BULLISH consecutive
+// SL LONG  = sub swing LOW care a creat MSS bullish  (tracked_sl)
+// SL SHORT = deasupra swing HIGH care a creat MSS bearish (tracked_sh)
 // ================================================================================
 bear_seq = (close < open) and (close[1] < open[1])
 bull_seq = (close > open) and (close[1] > open[1])
@@ -197,12 +190,6 @@ if bear_mss
 
 // ================================================================================
 // STRATEGY LOGIC
-// Reguli:
-//   - fereastra intrare: 16:00-19:00 RO
-//   - LONG  : pret > VAH si > VWAP + MSS bullish | SL sub swing low MSS
-//   - SHORT : pret < VAL si < VWAP + MSS bearish | SL deasupra swing high MSS
-//   - TP = distanta SL * RR (1.5)
-//   - max 2 trades/zi; trade 2 DOAR daca trade 1 s-a inchis pe SL
 // ================================================================================
 var int  trades_today = 0
 var bool last_was_sl  = false
@@ -244,11 +231,11 @@ if trade_ended
 // ================================================================================
 bgcolor(is_trade ? i_col_sess : na, title="Sesiune Trading")
 
-plot(is_pvp   ? running_vwap : na, "VWAP (PVP live)", color=color.new(i_col_vwap, 50), linewidth=1)
-plot(is_trade ? pvp_vwap     : na, "VWAP PVP",        color=i_col_vwap,                linewidth=2)
-plot(is_trade ? vah   : na, "VAH", color=i_col_vah, linewidth=2)
-plot(is_trade ? val_l : na, "VAL", color=i_col_val, linewidth=2)
-plot(is_trade ? poc_  : na, "POC", color=i_col_poc, linewidth=1, style=plot.style_cross)
+plot(is_pvp   ? running_vwap : na, "VWAP live PVP", color=color.new(i_col_vwap, 50), linewidth=1)
+plot(is_trade ? pvp_vwap     : na, "VWAP",          color=i_col_vwap,                linewidth=2)
+plot(is_trade ? vah          : na, "VAH",            color=i_col_vah,                 linewidth=2)
+plot(is_trade ? val_l        : na, "VAL",            color=i_col_val,                 linewidth=2)
+plot(is_trade ? poc_         : na, "POC",            color=i_col_poc,                 linewidth=1, style=plot.style_cross)
 
 plot(day_h,    "Day High",    color=i_col_dhl,  linewidth=1)
 plot(day_l,    "Day Low",     color=i_col_dhl,  linewidth=1)
@@ -261,6 +248,41 @@ plotshape(bull_mss,  "MSS Bullish",  shape.triangleup,   location.belowbar, colo
 plotshape(bear_mss,  "MSS Bearish",  shape.triangledown, location.abovebar, color.fuchsia, size=size.tiny,   text="MSSv")
 plotshape(long_ok,   "LONG Signal",  shape.labelup,      location.belowbar, color.green,   size=size.normal, text="LONG",  textcolor=color.white)
 plotshape(short_ok,  "SHORT Signal", shape.labeldown,    location.abovebar, color.red,     size=size.normal, text="SHORT", textcolor=color.white)
+
+// ================================================================================
+// ETICHETE PE LINII - apar la inceputul sesiunii (nu la dreapta chartului)
+// VAH   = Value Area High  (limita superioara zona de valoare)
+// VAL   = Value Area Low   (limita inferioara zona de valoare)
+// POC   = Point of Control (pretul cu cel mai mare volum tranzactionat)
+// VWAP  = VWAP calculat din sesiunea PVP 12:00-16:00
+// D.H   = Daily High  (maximul zilei calendaristice)
+// D.L   = Daily Low   (minimul zilei calendaristice)
+// NY.H  = NY Session High  (maximul sesiunii NY, de la 16:30 RO)
+// NY.L  = NY Session Low   (minimul sesiunii NY, de la 16:30 RO)
+// 4H.H  = High prima lumanare 4H NY (16:30-20:30 RO)
+// 4H.L  = Low prima lumanare 4H NY  (16:30-20:30 RO)
+// ================================================================================
+if pvp_ended
+    if not na(vah)
+        label.new(bar_index, vah,      "VAH",  color=color.new(i_col_vah,  75), textcolor=i_col_vah,  style=label.style_label_right, size=size.small)
+    if not na(val_l)
+        label.new(bar_index, val_l,    "VAL",  color=color.new(i_col_val,  75), textcolor=i_col_val,  style=label.style_label_right, size=size.small)
+    if not na(poc_)
+        label.new(bar_index, poc_,     "POC",  color=color.new(i_col_poc,  75), textcolor=i_col_poc,  style=label.style_label_right, size=size.small)
+    if not na(pvp_vwap)
+        label.new(bar_index, pvp_vwap, "VWAP", color=color.new(i_col_vwap, 75), textcolor=i_col_vwap, style=label.style_label_right, size=size.small)
+    if not na(day_h)
+        label.new(bar_index, day_h,    "D.H",  color=color.new(i_col_dhl,  75), textcolor=i_col_dhl,  style=label.style_label_right, size=size.small)
+    if not na(day_l)
+        label.new(bar_index, day_l,    "D.L",  color=color.new(i_col_dhl,  75), textcolor=i_col_dhl,  style=label.style_label_right, size=size.small)
+
+if nyday_started
+    label.new(bar_index, high, "NY.H", color=color.new(i_col_nyhl, 75), textcolor=i_col_nyhl, style=label.style_label_right, size=size.small)
+    label.new(bar_index, low,  "NY.L", color=color.new(i_col_nyhl, 75), textcolor=i_col_nyhl, style=label.style_label_right, size=size.small)
+
+if ny4h_started
+    label.new(bar_index, high, "4H.H", color=color.new(i_col_4hhl, 75), textcolor=i_col_4hhl, style=label.style_label_right, size=size.small)
+    label.new(bar_index, low,  "4H.L", color=color.new(i_col_4hhl, 75), textcolor=i_col_4hhl, style=label.style_label_right, size=size.small)
 
 alertcondition(long_ok,  "LONG",  "Adiiva: LONG - deasupra VAH & VWAP | Bullish MSS")
 alertcondition(short_ok, "SHORT", "Adiiva: SHORT - sub VAL & VWAP | Bearish MSS")
