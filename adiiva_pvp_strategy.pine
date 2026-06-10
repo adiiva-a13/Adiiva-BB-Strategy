@@ -154,6 +154,10 @@ if ny4h_started
     xny = bar_index
     ln_nyh := not na(prev_ny_h) ? line.new(xny, prev_ny_h, xny + 1, prev_ny_h, extend=extend.right, color=i_col_nyhl, width=1, style=line.style_solid) : na
     ln_nyl := not na(prev_ny_l) ? line.new(xny, prev_ny_l, xny + 1, prev_ny_l, extend=extend.right, color=i_col_nyhl, width=1, style=line.style_solid) : na
+    if not na(prev_ny_h)
+        label.new(xny, prev_ny_h, "NY.H", style=label.style_none, textcolor=i_col_nyhl, size=size.small)
+    if not na(prev_ny_l)
+        label.new(xny, prev_ny_l, "NY.L", style=label.style_none, textcolor=i_col_nyhl, size=size.small)
     ny_cal_h := high
     ny_cal_l := low
     ny4h_h := high
@@ -172,6 +176,10 @@ if ny4h_ended
     x4h = bar_index
     ln_4hh := not na(prev_4h_h) ? line.new(x4h, prev_4h_h, x4h + 1, prev_4h_h, extend=extend.right, color=i_col_4hhl, width=1, style=line.style_dashed) : na
     ln_4hl := not na(prev_4h_l) ? line.new(x4h, prev_4h_l, x4h + 1, prev_4h_l, extend=extend.right, color=i_col_4hhl, width=1, style=line.style_dashed) : na
+    if not na(prev_4h_h)
+        label.new(x4h, prev_4h_h, "4H.H", style=label.style_none, textcolor=i_col_4hhl, size=size.small)
+    if not na(prev_4h_l)
+        label.new(x4h, prev_4h_l, "4H.L", style=label.style_none, textcolor=i_col_4hhl, size=size.small)
 
 // ================================================================================
 // MSS DETECTION
@@ -272,10 +280,13 @@ if pvp_ended
     x = bar_index
     if not na(vah)
         ln_vah := line.new(x, vah,   x + 1, vah,   extend=extend.right, color=i_col_vah, width=2, style=line.style_solid)
+        label.new(x, vah,   "VAH", style=label.style_none, textcolor=i_col_vah,  size=size.small)
     if not na(val_l)
         ln_val := line.new(x, val_l, x + 1, val_l, extend=extend.right, color=i_col_val, width=2, style=line.style_solid)
+        label.new(x, val_l, "VAL", style=label.style_none, textcolor=i_col_val,  size=size.small)
     if not na(poc_)
         ln_poc := line.new(x, poc_,  x + 1, poc_,  extend=extend.right, color=i_col_poc, width=1, style=line.style_dashed)
+        label.new(x, poc_,  "POC", style=label.style_none, textcolor=i_col_poc,  size=size.small)
 
 // ================================================================================
 // PLOTS
@@ -290,35 +301,6 @@ plotshape(bear_mss,  "MSS Bearish",  shape.triangledown, location.abovebar, colo
 plotshape(long_ok,   "LONG Signal",  shape.labelup,      location.belowbar, color.green,   size=size.normal, text="LONG",  textcolor=color.white)
 plotshape(short_ok,  "SHORT Signal", shape.labeldown,    location.abovebar, color.red,     size=size.normal, text="SHORT", textcolor=color.white)
 
-// ================================================================================
-// ETICHETE INLINE la ora 18:00
-// VAH  = Value Area High       | VAL  = Value Area Low
-// POC  = Point of Control
-// D.H  = Daily High (la 16:00) | D.L  = Daily Low (la 16:00)
-// NY.H = NY High ziua PREV     | NY.L = NY Low ziua PREV
-// 4H.H = Prima 4H NY High PREV | 4H.L = Prima 4H NY Low PREV
-// ================================================================================
-var bool lbl_drawn = false
-if pvp_started
-    lbl_drawn := false
-
-if is_trade and not lbl_drawn and hour(time, TZ) >= 18
-    lbl_drawn := true
-    if not na(vah)
-        label.new(bar_index, vah,       "VAH",  style=label.style_none, textcolor=i_col_vah,  size=size.small)
-    if not na(val_l)
-        label.new(bar_index, val_l,     "VAL",  style=label.style_none, textcolor=i_col_val,  size=size.small)
-    if not na(poc_)
-        label.new(bar_index, poc_,      "POC",  style=label.style_none, textcolor=i_col_poc,  size=size.small)
-
-    if not na(prev_ny_h)
-        label.new(bar_index, prev_ny_h, "NY.H", style=label.style_none, textcolor=i_col_nyhl, size=size.small)
-    if not na(prev_ny_l)
-        label.new(bar_index, prev_ny_l, "NY.L", style=label.style_none, textcolor=i_col_nyhl, size=size.small)
-    if not na(prev_4h_h)
-        label.new(bar_index, prev_4h_h, "4H.H", style=label.style_none, textcolor=i_col_4hhl, size=size.small)
-    if not na(prev_4h_l)
-        label.new(bar_index, prev_4h_l, "4H.L", style=label.style_none, textcolor=i_col_4hhl, size=size.small)
 
 alertcondition(long_ok,  "LONG",  "Adiiva: LONG - deasupra VAH & VWAP | Bullish MSS")
 alertcondition(short_ok, "SHORT", "Adiiva: SHORT - sub VAL & VWAP | Bearish MSS")
