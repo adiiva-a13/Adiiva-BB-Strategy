@@ -301,16 +301,16 @@ long_ok  = waiting_long  and strategy.opentrades == 0 and is_entry and bars_l >=
 short_ok = waiting_short and strategy.opentrades == 0 and is_entry and bars_s >= 1 and high >= retest_lvl_s - syminfo.mintick * 10
 
 if long_ok
-    sl_dist = math.max(close - sl_long, syminfo.mintick * 10)
-    strategy.entry("LONG", strategy.long)
-    strategy.exit("LONG_X", "LONG", stop=sl_long, limit=close + sl_dist * i_rr)
+    sl_dist = math.max(retest_lvl_l - sl_long, syminfo.mintick * 10)
+    strategy.entry("LONG", strategy.long, limit=retest_lvl_l)
+    strategy.exit("LONG_X", "LONG", stop=sl_long, limit=retest_lvl_l + sl_dist * i_rr)
     trades_today += 1
     waiting_long := false
 
 if short_ok
-    sl_dist = math.max(sl_short - close, syminfo.mintick * 10)
-    strategy.entry("SHORT", strategy.short)
-    strategy.exit("SHORT_X", "SHORT", stop=sl_short, limit=close - sl_dist * i_rr)
+    sl_dist = math.max(sl_short - retest_lvl_s, syminfo.mintick * 10)
+    strategy.entry("SHORT", strategy.short, limit=retest_lvl_s)
+    strategy.exit("SHORT_X", "SHORT", stop=sl_short, limit=retest_lvl_s - sl_dist * i_rr)
     trades_today += 1
     waiting_short := false
 
