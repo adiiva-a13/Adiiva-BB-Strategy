@@ -265,7 +265,7 @@ can_enter      = is_entry and strategy.opentrades == 0 and trade_limit_ok
 long_setup  = can_enter and not na(vah) and close > vah and close > session_vwap and bull_mss
 short_setup = can_enter and not na(val_l) and close < val_l and close < session_vwap and bear_mss
 
-if long_setup and not waiting_long and not waiting_short
+if long_setup and not waiting_short
     waiting_long   := true
     setup_bar_l    := bar_index
     retest_lvl_l   := bull_mss_lvl
@@ -273,7 +273,7 @@ if long_setup and not waiting_long and not waiting_short
     entry_ref_l    := close
     sl_dist_ref_l  := math.max(close - sl_long, syminfo.mintick * 10)
 
-if short_setup and not waiting_short and not waiting_long
+if short_setup and not waiting_long
     waiting_short  := true
     setup_bar_s    := bar_index
     retest_lvl_s   := bear_mss_lvl
