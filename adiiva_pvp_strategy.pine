@@ -303,18 +303,22 @@ if waiting_short and bars_s >= 1
 // Limit activ pe fiecare bara cat timp asteptam retest
 // Cu process_orders_on_close=false, ordinul pus pe bara N se umple la bara N+1 → prima bara dupa MSS
 if waiting_long and strategy.opentrades == 0 and is_entry
-    sl_dist_l = math.max(retest_lvl_l - sl_long, syminfo.mintick * 10)
     strategy.entry("LONG",  strategy.long,  limit=retest_lvl_l)
-    strategy.exit ("LONG_X",  "LONG",  stop=sl_long,  limit=retest_lvl_l + sl_dist_l * i_rr)
 else
     strategy.cancel("LONG")
 
 if waiting_short and strategy.opentrades == 0 and is_entry
-    sl_dist_s = math.max(sl_short - retest_lvl_s, syminfo.mintick * 10)
     strategy.entry("SHORT", strategy.short, limit=retest_lvl_s)
-    strategy.exit ("SHORT_X", "SHORT", stop=sl_short, limit=retest_lvl_s - sl_dist_s * i_rr)
 else
     strategy.cancel("SHORT")
+
+// Exit pus separat, doar cand pozitia e deja deschisa (evita SL hit same-bar cu entry)
+if strategy.position_size > 0 and not na(sl_long) and not na(retest_lvl_l)
+    sl_dist_l = math.max(retest_lvl_l - sl_long, syminfo.mintick * 10)
+    strategy.exit("LONG_X",  "LONG",  stop=sl_long,  limit=retest_lvl_l + sl_dist_l * i_rr)
+if strategy.position_size < 0 and not na(sl_short) and not na(retest_lvl_s)
+    sl_dist_s = math.max(sl_short - retest_lvl_s, syminfo.mintick * 10)
+    strategy.exit("SHORT_X", "SHORT", stop=sl_short, limit=retest_lvl_s - sl_dist_s * i_rr)
 
 // Detectez umplerea ordinului
 if strategy.opentrades > 0 and strategy.opentrades[1] == 0
@@ -368,6 +372,18 @@ plot(session_vwap, "VWAP", color=i_col_vwap, linewidth=2)
 
 plot(waiting_long  ? retest_lvl_l : na, "Retest Level L", color=color.yellow, linewidth=1, style=plot.style_circles)
 plot(waiting_short ? retest_lvl_s : na, "Retest Level S", color=color.yellow, linewidth=1, style=plot.style_circles)
+
+// SL si TP vizibile pe grafic: apar cat timp asteptam retest SAU cat timp e pozitie deschisa
+_show_l  = waiting_long  or strategy.position_size > 0
+_show_s  = waiting_short or strategy.position_size < 0
+_tp_l    = not na(retest_lvl_l) and not na(sl_long)  ? retest_lvl_l + math.max(retest_lvl_l - sl_long,  syminfo.mintick*10) * i_rr : na
+_tp_s    = not na(retest_lvl_s) and not na(sl_short) ? retest_lvl_s - math.max(sl_short - retest_lvl_s, syminfo.mintick*10) * i_rr : na
+
+plot(_show_l ? sl_long  : na, "SL Long",  color=color.red,                   linewidth=1, style=plot.style_line)
+plot(_show_s ? sl_short : na, "SL Short", color=color.lime,                  linewidth=1, style=plot.style_line)
+plot(_show_l ? _tp_l    : na, "TP Long",  color=color.new(color.green,  30), linewidth=1, style=plot.style_line)
+plot(_show_s ? _tp_s    : na, "TP Short", color=color.new(color.red,    30), linewidth=1, style=plot.style_line)
+
 plot(strategy.opentrades, "Open Trades (debug)", color=color.orange, display=display.data_window)
 
 plotshape(bull_mss,  "MSS Bullish",  shape.triangleup,   location.belowbar, color.lime,    size=size.tiny,   text="MSS^")
