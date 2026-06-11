@@ -1,6 +1,6 @@
 //@version=5
 strategy("Adiiva PVP Strategy", overlay=true, max_bars_back=1000,
-         process_orders_on_close=true,
+         process_orders_on_close=false,
          default_qty_type=strategy.percent_of_equity, default_qty_value=10,
          commission_type=strategy.commission.percent, commission_value=0.05)
 
@@ -202,13 +202,14 @@ var float bull_seq_sh  = na
 var float bull_mss_lvl = na  // swing high spart → nivel retest LONG
 var float bear_mss_lvl = na  // swing low spart → nivel retest SHORT
 
-if bear_seq
-    new_sh     = math.max(high[2], high[3])
-    tracked_sh := na(tracked_sh) ? new_sh : math.max(tracked_sh, new_sh)
+bear_seq_start = bear_seq and not bear_seq[1]
+bull_seq_start = bull_seq and not bull_seq[1]
+
+if bear_seq_start
+    tracked_sh  := math.max(high[2], high[3])
     bear_seq_sl := math.min(low[0], low[1])
-if bull_seq
-    new_sl     = math.min(low[2], low[3])
-    tracked_sl := na(tracked_sl) ? new_sl : math.min(tracked_sl, new_sl)
+if bull_seq_start
+    tracked_sl  := math.min(low[2], low[3])
     bull_seq_sh := math.max(high[0], high[1])
 
 bull_mss = not na(tracked_sh) and close > tracked_sh and close[1] <= tracked_sh
@@ -300,14 +301,15 @@ if waiting_short and bars_s >= 1
         waiting_short := false
 
 // Limit activ pe fiecare bara cat timp asteptam retest
-if waiting_long and bars_l >= 1 and strategy.opentrades == 0 and is_entry
+// Cu process_orders_on_close=false, ordinul pus pe bara N se umple la bara N+1 → prima bara dupa MSS
+if waiting_long and strategy.opentrades == 0 and is_entry
     sl_dist_l = math.max(retest_lvl_l - sl_long, syminfo.mintick * 10)
     strategy.entry("LONG",  strategy.long,  limit=retest_lvl_l)
     strategy.exit ("LONG_X",  "LONG",  stop=sl_long,  limit=retest_lvl_l + sl_dist_l * i_rr)
 else
     strategy.cancel("LONG")
 
-if waiting_short and bars_s >= 1 and strategy.opentrades == 0 and is_entry
+if waiting_short and strategy.opentrades == 0 and is_entry
     sl_dist_s = math.max(sl_short - retest_lvl_s, syminfo.mintick * 10)
     strategy.entry("SHORT", strategy.short, limit=retest_lvl_s)
     strategy.exit ("SHORT_X", "SHORT", stop=sl_short, limit=retest_lvl_s - sl_dist_s * i_rr)
@@ -323,8 +325,8 @@ if strategy.opentrades > 0 and strategy.opentrades[1] == 0
         trades_today += 1
         waiting_short := false
 
-long_ok  = waiting_long  and bars_l >= 1 and strategy.opentrades == 0 and is_entry and low  <= retest_lvl_l
-short_ok = waiting_short and bars_s >= 1 and strategy.opentrades == 0 and is_entry and high >= retest_lvl_s
+long_fill  = strategy.opentrades > strategy.opentrades[1] and strategy.position_size > 0
+short_fill = strategy.opentrades > strategy.opentrades[1] and strategy.position_size < 0
 
 if trade_ended
     strategy.close_all("EOD")
@@ -370,11 +372,11 @@ plot(strategy.opentrades, "Open Trades (debug)", color=color.orange, display=dis
 
 plotshape(bull_mss,  "MSS Bullish",  shape.triangleup,   location.belowbar, color.lime,    size=size.tiny,   text="MSS^")
 plotshape(bear_mss,  "MSS Bearish",  shape.triangledown, location.abovebar, color.fuchsia, size=size.tiny,   text="MSSv")
-plotshape(long_ok,   "LONG Signal",  shape.labelup,      location.belowbar, color.green,   size=size.normal, text="LONG",  textcolor=color.white)
-plotshape(short_ok,  "SHORT Signal", shape.labeldown,    location.abovebar, color.red,     size=size.normal, text="SHORT", textcolor=color.white)
-plotshape(long_ok,   "Retest LONG",  shape.circle, location.belowbar, color.new(color.lime,   40), size=size.tiny, text="R")
-plotshape(short_ok,  "Retest SHORT", shape.circle, location.abovebar, color.new(color.red,    40), size=size.tiny, text="R")
+plotshape(long_fill,  "LONG Signal",  shape.labelup,      location.belowbar, color.green,   size=size.normal, text="LONG",  textcolor=color.white)
+plotshape(short_fill, "SHORT Signal", shape.labeldown,    location.abovebar, color.red,     size=size.normal, text="SHORT", textcolor=color.white)
+plotshape(long_fill,  "Retest LONG",  shape.circle, location.belowbar, color.new(color.lime,   40), size=size.tiny, text="R")
+plotshape(short_fill, "Retest SHORT", shape.circle, location.abovebar, color.new(color.red,    40), size=size.tiny, text="R")
 
 
-alertcondition(long_ok,  "LONG",  "Adiiva: LONG - deasupra VAH & VWAP | Bullish MSS")
-alertcondition(short_ok, "SHORT", "Adiiva: SHORT - sub VAL & VWAP | Bearish MSS")
+alertcondition(long_fill,  "LONG",  "Adiiva: LONG - deasupra VAH & VWAP | Bullish MSS")
+alertcondition(short_fill, "SHORT", "Adiiva: SHORT - sub VAL & VWAP | Bearish MSS")
