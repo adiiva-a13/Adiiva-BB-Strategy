@@ -202,11 +202,13 @@ var float bull_seq_sh  = na
 var float bull_mss_lvl = na  // swing high spart → nivel retest LONG
 var float bear_mss_lvl = na  // swing low spart → nivel retest SHORT
 
-if bear_seq and na(tracked_sh)
-    tracked_sh  := math.max(high[2], high[3])
+if bear_seq
+    new_sh     = math.max(high[2], high[3])
+    tracked_sh := na(tracked_sh) ? new_sh : math.max(tracked_sh, new_sh)
     bear_seq_sl := math.min(low[0], low[1])
-if bull_seq and na(tracked_sl)
-    tracked_sl  := math.min(low[2], low[3])
+if bull_seq
+    new_sl     = math.min(low[2], low[3])
+    tracked_sl := na(tracked_sl) ? new_sl : math.min(tracked_sl, new_sl)
     bull_seq_sh := math.max(high[0], high[1])
 
 bull_mss = not na(tracked_sh) and close > tracked_sh and close[1] <= tracked_sh
@@ -247,6 +249,10 @@ if pvp_started
     last_was_sl   := false
     waiting_long  := false
     waiting_short := false
+    tracked_sh    := na
+    tracked_sl    := na
+    bear_seq_sl   := na
+    bull_seq_sh   := na
 
 if trade_ended
     waiting_long  := false
