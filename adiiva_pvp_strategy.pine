@@ -195,10 +195,12 @@ if ny4h_ended
 bear_seq = (close < open) and (close[1] < open[1])
 bull_seq = (close > open) and (close[1] > open[1])
 
-var float tracked_sh  = na
-var float tracked_sl  = na
-var float bear_seq_sl = na  // low pullback bearish → SL pentru LONG
-var float bull_seq_sh = na  // high pullback bullish → SL pentru SHORT
+var float tracked_sh   = na
+var float tracked_sl   = na
+var float bear_seq_sl  = na
+var float bull_seq_sh  = na
+var float bull_mss_lvl = na  // swing high spart → nivel retest LONG
+var float bear_mss_lvl = na  // swing low spart → nivel retest SHORT
 
 if bear_seq
     tracked_sh  := math.max(high[2], high[3])
@@ -214,49 +216,103 @@ bull_mss_sl = bear_seq_sl
 bear_mss_sl = bull_seq_sh
 
 if bull_mss
-    tracked_sh  := na
-    bear_seq_sl := na
+    bull_mss_lvl := tracked_sh
+    tracked_sh   := na
+    bear_seq_sl  := na
 if bear_mss
-    tracked_sl  := na
-    bull_seq_sh := na
+    bear_mss_lvl := tracked_sl
+    tracked_sl   := na
+    bull_seq_sh  := na
 
 // ================================================================================
 // STRATEGY LOGIC
-// Conditie LONG  : pret > VAH  SI pret > VWAP (session) + MSS bullish
-// Conditie SHORT : pret < VAL  SI pret < VWAP (session) + MSS bearish
+// Setup  LONG  : pret > VAH  SI pret > VWAP (session) + MSS bullish → asteapta retest
+// Setup  SHORT : pret < VAL  SI pret < VWAP (session) + MSS bearish → asteapta retest
+// Retest: pret atinge nivelul spart (max 4 candele), altfel anulat
+// Anulat daca pretul urca/coboara 1R in directia favorabila fara retest
 // ================================================================================
-var int  trades_today = 0
-var bool last_was_sl  = false
+var int   trades_today  = 0
+var bool  last_was_sl   = false
+var bool  waiting_long  = false
+var bool  waiting_short = false
+var int   setup_bar_l   = -1
+var int   setup_bar_s   = -1
+var float retest_lvl_l  = na
+var float retest_lvl_s  = na
+var float sl_long       = na
+var float sl_short      = na
+var float entry_ref_l   = na
+var float entry_ref_s   = na
+var float sl_dist_ref_l = na
+var float sl_dist_ref_s = na
 
 if pvp_started
-    trades_today := 0
-    last_was_sl  := false
+    trades_today  := 0
+    last_was_sl   := false
+    waiting_long  := false
+    waiting_short := false
+
+if trade_ended
+    waiting_long  := false
+    waiting_short := false
 
 if strategy.closedtrades > strategy.closedtrades[1]
     last_was_sl := strategy.closedtrades.profit(strategy.closedtrades - 1) < 0.0
 
 trade_limit_ok = trades_today < 2 and (trades_today == 0 or (trades_today == 1 and last_was_sl))
 can_enter      = is_entry and strategy.opentrades == 0 and trade_limit_ok
-long_ok        = can_enter and not na(vah) and close > vah and close > session_vwap and bull_mss
-short_ok       = can_enter and not na(val_l) and close < val_l and close < session_vwap and bear_mss
+
+long_setup  = can_enter and not na(vah) and close > vah and close > session_vwap and bull_mss
+short_setup = can_enter and not na(val_l) and close < val_l and close < session_vwap and bear_mss
+
+if long_setup and not waiting_long and not waiting_short
+    waiting_long   := true
+    setup_bar_l    := bar_index
+    retest_lvl_l   := bull_mss_lvl
+    sl_long        := na(bull_mss_sl) ? math.min(low[1], low[2]) : bull_mss_sl
+    entry_ref_l    := close
+    sl_dist_ref_l  := math.max(close - sl_long, syminfo.mintick * 10)
+
+if short_setup and not waiting_short and not waiting_long
+    waiting_short  := true
+    setup_bar_s    := bar_index
+    retest_lvl_s   := bear_mss_lvl
+    sl_short       := na(bear_mss_sl) ? math.max(high[1], high[2]) : bear_mss_sl
+    entry_ref_s    := close
+    sl_dist_ref_s  := math.max(sl_short - close, syminfo.mintick * 10)
+
+if waiting_long and bear_mss
+    waiting_long := false
+if waiting_short and bull_mss
+    waiting_short := false
+
+bars_l = bar_index - setup_bar_l
+bars_s = bar_index - setup_bar_s
+
+if waiting_long and bars_l >= 1
+    if bars_l > 4 or close >= entry_ref_l + sl_dist_ref_l or not is_entry
+        waiting_long := false
+
+if waiting_short and bars_s >= 1
+    if bars_s > 4 or close <= entry_ref_s - sl_dist_ref_s or not is_entry
+        waiting_short := false
+
+long_ok  = waiting_long  and strategy.opentrades == 0 and is_entry and bars_l >= 1 and low  <= retest_lvl_l
+short_ok = waiting_short and strategy.opentrades == 0 and is_entry and bars_s >= 1 and high >= retest_lvl_s
 
 if long_ok
-    sl_price = na(bull_mss_sl) ? math.min(low[1], low[2]) : bull_mss_sl
-    sl_dist  = math.max(close - sl_price, syminfo.mintick * 10)
+    sl_dist = math.max(close - sl_long, syminfo.mintick * 10)
     strategy.entry("LONG", strategy.long)
-    strategy.exit("LONG_X", "LONG", stop=sl_price, limit=close + sl_dist * i_rr)
+    strategy.exit("LONG_X", "LONG", stop=sl_long, limit=close + sl_dist * i_rr)
     trades_today += 1
-    tracked_sl  := na
-    bear_seq_sl := na
+    waiting_long := false
 
 if short_ok
-    sl_price = na(bear_mss_sl) ? math.max(high[1], high[2]) : bear_mss_sl
-    sl_dist  = math.max(sl_price - close, syminfo.mintick * 10)
+    sl_dist = math.max(sl_short - close, syminfo.mintick * 10)
     strategy.entry("SHORT", strategy.short)
-    strategy.exit("SHORT_X", "SHORT", stop=sl_price, limit=close - sl_dist * i_rr)
+    strategy.exit("SHORT_X", "SHORT", stop=sl_short, limit=close - sl_dist * i_rr)
     trades_today += 1
-    tracked_sh  := na
-    bull_seq_sh := na
+    waiting_short := false
 
 if trade_ended
     strategy.close_all("EOD")
