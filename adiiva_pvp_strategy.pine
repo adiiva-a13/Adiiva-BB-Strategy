@@ -297,8 +297,8 @@ if waiting_short and bars_s >= 1
     if bars_s > 4 or close <= entry_ref_s - sl_dist_ref_s or not is_entry
         waiting_short := false
 
-long_ok  = waiting_long  and strategy.opentrades == 0 and is_entry and bars_l >= 1 and low  <= retest_lvl_l
-short_ok = waiting_short and strategy.opentrades == 0 and is_entry and bars_s >= 1 and high >= retest_lvl_s
+long_ok  = waiting_long  and strategy.opentrades == 0 and is_entry and bars_l >= 1 and low  <= retest_lvl_l + syminfo.mintick * 10
+short_ok = waiting_short and strategy.opentrades == 0 and is_entry and bars_s >= 1 and high >= retest_lvl_s - syminfo.mintick * 10
 
 if long_ok
     sl_dist = math.max(close - sl_long, syminfo.mintick * 10)
