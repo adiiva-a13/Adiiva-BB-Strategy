@@ -281,9 +281,9 @@ if short_setup and not waiting_long
     entry_ref_s    := close
     sl_dist_ref_s  := math.max(sl_short - close, syminfo.mintick * 10)
 
-if waiting_long and bear_mss
-    waiting_long := false
-if waiting_short and bull_mss
+if waiting_long  and bear_mss and not na(vah)   and close < vah
+    waiting_long  := false
+if waiting_short and bull_mss and not na(val_l) and close > val_l
     waiting_short := false
 
 bars_l = bar_index - setup_bar_l
@@ -297,22 +297,32 @@ if waiting_short and bars_s >= 1
     if bars_s > 4 or close <= entry_ref_s - sl_dist_ref_s or not is_entry
         waiting_short := false
 
-long_ok  = waiting_long  and strategy.opentrades == 0 and is_entry and bars_l >= 1 and low  <= retest_lvl_l + syminfo.mintick * 10
-short_ok = waiting_short and strategy.opentrades == 0 and is_entry and bars_s >= 1 and high >= retest_lvl_s - syminfo.mintick * 10
+// Limit activ pe fiecare bara cat timp asteptam retest
+if waiting_long and bars_l >= 1 and strategy.opentrades == 0 and is_entry
+    sl_dist_l = math.max(retest_lvl_l - sl_long, syminfo.mintick * 10)
+    strategy.entry("LONG",  strategy.long,  limit=retest_lvl_l)
+    strategy.exit ("LONG_X",  "LONG",  stop=sl_long,  limit=retest_lvl_l + sl_dist_l * i_rr)
+else
+    strategy.cancel("LONG")
 
-if long_ok
-    sl_dist = math.max(retest_lvl_l - sl_long, syminfo.mintick * 10)
-    strategy.entry("LONG", strategy.long, limit=retest_lvl_l)
-    strategy.exit("LONG_X", "LONG", stop=sl_long, limit=retest_lvl_l + sl_dist * i_rr)
-    trades_today += 1
-    waiting_long := false
-
-if short_ok
-    sl_dist = math.max(sl_short - retest_lvl_s, syminfo.mintick * 10)
+if waiting_short and bars_s >= 1 and strategy.opentrades == 0 and is_entry
+    sl_dist_s = math.max(sl_short - retest_lvl_s, syminfo.mintick * 10)
     strategy.entry("SHORT", strategy.short, limit=retest_lvl_s)
-    strategy.exit("SHORT_X", "SHORT", stop=sl_short, limit=retest_lvl_s - sl_dist * i_rr)
-    trades_today += 1
-    waiting_short := false
+    strategy.exit ("SHORT_X", "SHORT", stop=sl_short, limit=retest_lvl_s - sl_dist_s * i_rr)
+else
+    strategy.cancel("SHORT")
+
+// Detectez umplerea ordinului
+if strategy.opentrades > 0 and strategy.opentrades[1] == 0
+    if waiting_long
+        trades_today += 1
+        waiting_long  := false
+    else if waiting_short
+        trades_today += 1
+        waiting_short := false
+
+long_ok  = waiting_long  and bars_l >= 1 and strategy.opentrades == 0 and is_entry and low  <= retest_lvl_l
+short_ok = waiting_short and bars_s >= 1 and strategy.opentrades == 0 and is_entry and high >= retest_lvl_s
 
 if trade_ended
     strategy.close_all("EOD")
