@@ -356,6 +356,8 @@ plotshape(bull_mss,  "MSS Bullish",  shape.triangleup,   location.belowbar, colo
 plotshape(bear_mss,  "MSS Bearish",  shape.triangledown, location.abovebar, color.fuchsia, size=size.tiny,   text="MSSv")
 plotshape(long_ok,   "LONG Signal",  shape.labelup,      location.belowbar, color.green,   size=size.normal, text="LONG",  textcolor=color.white)
 plotshape(short_ok,  "SHORT Signal", shape.labeldown,    location.abovebar, color.red,     size=size.normal, text="SHORT", textcolor=color.white)
+plotshape(waiting_long  and bars_l >= 1 and low  <= retest_lvl_l + syminfo.mintick * 10, "Retest LONG",  shape.circle, location.belowbar, color.new(color.lime,   40), size=size.tiny, text="R")
+plotshape(waiting_short and bars_s >= 1 and high >= retest_lvl_s - syminfo.mintick * 10, "Retest SHORT", shape.circle, location.abovebar, color.new(color.red,    40), size=size.tiny, text="R")
 
 
 alertcondition(long_ok,  "LONG",  "Adiiva: LONG - deasupra VAH & VWAP | Bullish MSS")
