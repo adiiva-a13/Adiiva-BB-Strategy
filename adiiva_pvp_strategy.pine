@@ -206,16 +206,19 @@ bear_seq_start = bear_seq and not bear_seq[1]
 bull_seq_start = bull_seq and not bull_seq[1]
 
 if bear_seq_start
-    tracked_sh  := math.max(high[2], high[3])
-    bear_seq_sl := math.min(low[0], low[1])
-else if bear_seq and not na(tracked_sh)
-    bear_seq_sl := math.min(bear_seq_sl, low[0])
+    new_sh     = math.max(high[2], high[3])
+    tracked_sh := na(tracked_sh) ? new_sh : math.max(tracked_sh, new_sh)
 
 if bull_seq_start
-    tracked_sl  := math.min(low[2], low[3])
-    bull_seq_sh := math.max(high[0], high[1])
-else if bull_seq and not na(tracked_sl)
-    bull_seq_sh := math.max(bull_seq_sh, high[0])
+    new_sl     = math.min(low[2], low[3])
+    tracked_sl := na(tracked_sl) ? new_sl : math.min(tracked_sl, new_sl)
+
+// SL urmareste minimul/maximul oricarei bare cat timp tracking-ul e activ
+// (indiferent daca bara e bearish/bullish sau daca secventa e intrerupta)
+if not na(tracked_sh)
+    bear_seq_sl := na(bear_seq_sl) ? low : math.min(bear_seq_sl, low)
+if not na(tracked_sl)
+    bull_seq_sh := na(bull_seq_sh) ? high : math.max(bull_seq_sh, high)
 
 bull_mss = not na(tracked_sh) and close > tracked_sh and close[1] <= tracked_sh
 bear_mss = not na(tracked_sl) and close < tracked_sl and close[1] >= tracked_sl
