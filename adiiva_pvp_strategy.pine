@@ -384,10 +384,10 @@ _show_s  = waiting_short or strategy.position_size < 0
 _tp_l    = not na(retest_lvl_l) and not na(sl_long)  ? retest_lvl_l + math.max(retest_lvl_l - sl_long,  syminfo.mintick*10) * i_rr : na
 _tp_s    = not na(retest_lvl_s) and not na(sl_short) ? retest_lvl_s - math.max(sl_short - retest_lvl_s, syminfo.mintick*10) * i_rr : na
 
-plot(_show_l ? sl_long  : na, "SL Long",  color=color.red,                   linewidth=1, style=plot.style_line)
-plot(_show_s ? sl_short : na, "SL Short", color=color.red,                   linewidth=1, style=plot.style_line)
-plot(_show_l ? _tp_l    : na, "TP Long",  color=color.new(color.green,  30), linewidth=1, style=plot.style_line)
-plot(_show_s ? _tp_s    : na, "TP Short", color=color.new(color.green,  30), linewidth=1, style=plot.style_line)
+plot(_show_l ? sl_long  : na, "SL Long",  color=color.red,                   linewidth=1, style=plot.style_linebr)
+plot(_show_s ? sl_short : na, "SL Short", color=color.red,                   linewidth=1, style=plot.style_linebr)
+plot(_show_l ? _tp_l    : na, "TP Long",  color=color.new(color.green,  30), linewidth=1, style=plot.style_linebr)
+plot(_show_s ? _tp_s    : na, "TP Short", color=color.new(color.green,  30), linewidth=1, style=plot.style_linebr)
 
 plot(strategy.opentrades, "Open Trades (debug)", color=color.orange, display=display.data_window)
 
