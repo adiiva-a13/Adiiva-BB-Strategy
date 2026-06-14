@@ -218,8 +218,7 @@ if bear_seq_start
     bear_seq_sl   := na(bear_seq_sl) ? new_sl : math.min(bear_seq_sl, new_sl)
 else if bear_seq
     last_bear_low := na(last_bear_low) ? low[0] : math.min(last_bear_low, low[0])
-    if not na(tracked_sh)
-        bear_seq_sl := math.min(bear_seq_sl, low[0])
+    bear_seq_sl   := na(bear_seq_sl) ? low[0] : math.min(bear_seq_sl, low[0])
 
 if bull_seq_start
     if not na(last_bear_low)
@@ -230,8 +229,7 @@ if bull_seq_start
     bull_seq_sh   := na(bull_seq_sh) ? new_sh : math.max(bull_seq_sh, new_sh)
 else if bull_seq
     last_bull_high := na(last_bull_high) ? high[0] : math.max(last_bull_high, high[0])
-    if not na(tracked_sl)
-        bull_seq_sh := math.max(bull_seq_sh, high[0])
+    bull_seq_sh    := na(bull_seq_sh) ? high[0] : math.max(bull_seq_sh, high[0])
 
 bull_mss = not na(tracked_sh) and close > tracked_sh and close[1] <= tracked_sh
 bear_mss = not na(tracked_sl) and close < tracked_sl and close[1] >= tracked_sl
@@ -412,7 +410,7 @@ plot(_show_l ? _tp_l    : na, "TP Long",  color=color.new(color.green,  30), lin
 plot(_show_s ? _tp_s    : na, "TP Short", color=color.new(color.green,  30), linewidth=1, style=plot.style_linebr)
 
 plot(strategy.opentrades, "Open Trades (debug)", color=color.orange, display=display.data_window)
-plot(tracked_sl, "tracked_sl (debug)", color=color.aqua,   display=display.data_window)
+plot(tracked_sl, "tracked_sl (debug)", color=color.new(color.aqua, 50), linewidth=1, style=plot.style_stepline)
 plot(tracked_sh, "tracked_sh (debug)", color=color.purple, display=display.data_window)
 
 plotshape(bull_mss,  "MSS Bullish",  shape.triangleup,   location.belowbar, color.lime,    size=size.tiny,   text="MSS^")
