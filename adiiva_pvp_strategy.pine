@@ -224,8 +224,6 @@ else if bear_seq
 if bull_seq_start
     if not na(last_bear_low)
         tracked_sl := last_bear_low
-    if not na(last_bull_high)
-        tracked_sh := last_bull_high
     last_bear_low  := na
     last_bull_high := math.max(high[0], high[1])
     new_sh         = math.max(high[0], high[1])
