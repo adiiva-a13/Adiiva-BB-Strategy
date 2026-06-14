@@ -246,11 +246,13 @@ if bull_mss
     tracked_sh    := na
     bear_seq_sl   := na
     last_bear_low  := na
+    last_bull_high := na
 if bear_mss
     bear_mss_lvl  := tracked_sl
     tracked_sl    := na
     bull_seq_sh   := na
     last_bull_high := na
+    last_bear_low  := na
 
 // ================================================================================
 // STRATEGY LOGIC
