@@ -231,8 +231,8 @@ else if bull_seq
     if not na(tracked_sl)
         bull_seq_sh := math.max(bull_seq_sh, high[0])
 
-bull_mss = not na(tracked_sh) and close > tracked_sh and close[1] <= tracked_sh
-bear_mss = not na(tracked_sl) and close < tracked_sl and close[1] >= tracked_sl
+bull_mss = not na(tracked_sh) and bull_seq_start and close > tracked_sh and close[2] <= tracked_sh
+bear_mss = not na(tracked_sl) and bear_seq_start and close < tracked_sl and close[2] >= tracked_sl
 
 bull_mss_sl = bear_seq_sl
 bear_mss_sl = bull_seq_sh
