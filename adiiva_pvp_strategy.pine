@@ -410,8 +410,8 @@ plot(_show_l ? _tp_l    : na, "TP Long",  color=color.new(color.green,  30), lin
 plot(_show_s ? _tp_s    : na, "TP Short", color=color.new(color.green,  30), linewidth=1, style=plot.style_linebr)
 
 plot(strategy.opentrades, "Open Trades (debug)", color=color.orange, display=display.data_window)
-plot(tracked_sl, "tracked_sl (debug)", color=color.new(color.aqua, 50), linewidth=1, style=plot.style_stepline)
-plot(tracked_sh, "tracked_sh (debug)", color=color.purple, display=display.data_window)
+plot(tracked_sl, "tracked_sl → BEAR MSS nivel", color=color.new(color.aqua,   50), linewidth=1, style=plot.style_stepline)
+plot(tracked_sh, "tracked_sh → BULL MSS nivel", color=color.new(color.purple, 50), linewidth=1, style=plot.style_stepline)
 
 plotshape(bull_mss,  "MSS Bullish",  shape.triangleup,   location.belowbar, color.lime,    size=size.tiny,   text="MSS^")
 plotshape(bear_mss,  "MSS Bearish",  shape.triangledown, location.abovebar, color.fuchsia, size=size.tiny,   text="MSSv")
