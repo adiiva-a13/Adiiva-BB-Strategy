@@ -209,7 +209,8 @@ bear_seq_start = bear_seq and not bear_seq[1]
 bull_seq_start = bull_seq and not bull_seq[1]
 
 if bear_seq_start
-    tracked_sh := na(last_bull_high) ? math.max(high[0], high[1]) : math.max(last_bull_high, high[0], high[1])
+    if not na(last_bull_high)
+        tracked_sh := last_bull_high
     last_bull_high := na
     last_bear_low  := na(last_bear_low) ? math.min(low[0], low[1]) : math.min(last_bear_low, low[0], low[1])
     new_sl         = math.min(low[0], low[1])
@@ -231,7 +232,7 @@ else if bull_seq
     bull_seq_sh    := na(bull_seq_sh) ? high[0] : math.max(bull_seq_sh, high[0])
 
 bull_mss = not na(tracked_sh) and close > tracked_sh and close[1] <= tracked_sh and not bear_seq_start
-bear_mss = not na(tracked_sl) and close < tracked_sl and close[1] >= tracked_sl and not bull_seq_start
+bear_mss = not na(tracked_sl) and close < tracked_sl and not bull_seq_start
 
 bull_mss_sl = bear_seq_sl
 bear_mss_sl = bull_seq_sh
