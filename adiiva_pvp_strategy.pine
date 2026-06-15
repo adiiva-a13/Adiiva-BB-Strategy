@@ -203,13 +203,14 @@ var float bull_mss_lvl   = na  // swing high spart → nivel retest LONG
 var float bear_mss_lvl   = na  // swing low spart → nivel retest SHORT
 var float last_bear_low  = na  // low-ul intregii secvente bearish curente
 var float last_bull_high = na  // high-ul intregii secvente bullish curente
+var int   last_mss_dir   = 0   // 0=niciuna, 1=bull MSS, -1=bear MSS (alternare)
 
 bear_seq_start = bear_seq and not bear_seq[1]
 bull_seq_start = bull_seq and not bull_seq[1]
 
 if bear_seq_start
     if not na(last_bull_high)
-        tracked_sh := na(tracked_sh) ? last_bull_high : math.max(tracked_sh, last_bull_high)
+        tracked_sh := last_bull_high
     last_bull_high := na
     last_bear_low  := na(last_bear_low) ? math.min(low[0], low[1]) : math.min(last_bear_low, low[0], low[1])
     new_sl         = math.min(low[0], low[1])
@@ -220,7 +221,7 @@ else if bear_seq
 
 if bull_seq_start
     if not na(last_bear_low)
-        tracked_sl := na(tracked_sl) ? last_bear_low : math.min(tracked_sl, last_bear_low)
+        tracked_sl := last_bear_low
     last_bear_low  := na
     last_bull_high := na(last_bull_high) ? math.max(high[0], high[1]) : math.max(last_bull_high, high[0], high[1])
     new_sh         = math.max(high[0], high[1])
@@ -229,8 +230,8 @@ else if bull_seq
     last_bull_high := na(last_bull_high) ? high[0] : math.max(last_bull_high, high[0])
     bull_seq_sh    := na(bull_seq_sh) ? high[0] : math.max(bull_seq_sh, high[0])
 
-bull_mss = not na(tracked_sh) and close > tracked_sh and close[1] <= tracked_sh and not bear_seq_start
-bear_mss = not na(tracked_sl) and close < tracked_sl and close[1] >= tracked_sl and not bull_seq_start
+bull_mss = not na(tracked_sh) and close > tracked_sh and close[1] <= tracked_sh and not bear_seq_start and last_mss_dir != 1
+bear_mss = not na(tracked_sl) and close < tracked_sl and close[1] >= tracked_sl and not bull_seq_start and last_mss_dir != -1
 
 bull_mss_sl = bear_seq_sl
 bear_mss_sl = bull_seq_sh
@@ -241,12 +242,14 @@ if bull_mss
     bear_seq_sl   := na
     last_bear_low  := na
     last_bull_high := na
+    last_mss_dir   := 1
 if bear_mss
     bear_mss_lvl  := tracked_sl
     tracked_sl    := na
     bull_seq_sh   := na
     last_bull_high := na
     last_bear_low  := na
+    last_mss_dir   := -1
 
 // ================================================================================
 // STRATEGY LOGIC
@@ -277,6 +280,7 @@ if pvp_started
     bull_seq_sh    := na
     last_bear_low  := na
     last_bull_high := na
+    last_mss_dir   := 0
 
 if trade_ended
     waiting_long  := false
