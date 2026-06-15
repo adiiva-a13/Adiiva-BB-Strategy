@@ -230,8 +230,8 @@ else if bull_seq
     last_bull_high := na(last_bull_high) ? high[0] : math.max(last_bull_high, high[0])
     bull_seq_sh    := na(bull_seq_sh) ? high[0] : math.max(bull_seq_sh, high[0])
 
-bull_mss = not na(tracked_sh) and close > tracked_sh and close[1] <= tracked_sh and not bear_seq_start and last_mss_dir != 1
-bear_mss = not na(tracked_sl) and close < tracked_sl and close[1] >= tracked_sl and not bull_seq_start and last_mss_dir != -1
+bull_mss = not na(tracked_sh) and close > tracked_sh and close[1] <= tracked_sh and not bear_seq_start
+bear_mss = not na(tracked_sl) and close < tracked_sl and close[1] >= tracked_sl and not bull_seq_start
 
 bull_mss_sl = bear_seq_sl
 bear_mss_sl = bull_seq_sh
