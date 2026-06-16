@@ -210,8 +210,11 @@ bear_seq_start = bear_seq and not bear_seq[1]
 bull_seq_start = bull_seq and not bull_seq[1]
 
 if bear_seq_start
-    new_sh = not na(last_bull_high) ? math.max(last_bull_high, high[1], high[2]) : math.max(high[1], high[2])
-    tracked_sh    := na(tracked_sh) ? new_sh : math.max(tracked_sh, new_sh)
+    prior_green = close[2] > open[2]
+    if not na(last_bull_high) or prior_green
+        new_sh = not na(last_bull_high) ? math.max(last_bull_high, high[1], high[2]) : high[2]
+        if na(bull_mss_lvl) or new_sh >= bull_mss_lvl
+            tracked_sh := na(tracked_sh) ? new_sh : math.max(tracked_sh, new_sh)
     display_sl    := na(display_sl) ? math.min(low[0], low[1]) : math.min(display_sl, low[0], low[1])
     last_bull_high := na
     last_bear_low  := na(last_bear_low) ? math.min(low[0], low[1]) : math.min(last_bear_low, low[0], low[1])
@@ -246,7 +249,7 @@ bear_mss_sl = not na(bull_seq_sh) ? bull_seq_sh : tracked_sh
 
 if bull_mss
     bull_mss_lvl  := tracked_sh
-    // tracked_sh raman la acelasi nivel - nu se sterge la bull MSS
+    tracked_sh    := na
     tracked_sl    := na
     display_sl    := na
     bear_seq_sl   := na
@@ -261,6 +264,7 @@ if bear_mss
     tracked_sh    := na
     bull_seq_sh   := na
     bear_seq_sl   := na
+    bull_mss_lvl  := na
     last_bull_high := na
     last_bear_low  := na
     last_mss_dir   := -1
@@ -293,6 +297,7 @@ if pvp_started
     display_sl     := na
     bear_seq_sl    := na
     bull_seq_sh    := na
+    bull_mss_lvl   := na
     last_bear_low  := na
     last_bull_high := na
     last_mss_dir   := 0
