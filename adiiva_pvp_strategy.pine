@@ -244,10 +244,16 @@ else if bull_seq
 bull_mss = not na(tracked_sh) and close > tracked_sh and close[1] <= tracked_sh and not bear_seq_start
 bear_mss = not na(tracked_sl) and close < tracked_sl and not bull_seq_start
 
-bull_mss_sl = bear_seq_sl
-bear_mss_sl = not na(bull_seq_sh) ? bull_seq_sh : tracked_sh
+var float bull_mss_sl      = na
+var float bear_mss_sl      = na
+var bool  mss_pending_long = false
+var bool  mss_pending_short = false
+
+_bull_mss_sl = bear_seq_sl
+_bear_mss_sl = not na(bull_seq_sh) ? bull_seq_sh : tracked_sh
 
 if bull_mss
+    bull_mss_sl   := _bull_mss_sl
     bull_mss_lvl  := tracked_sh
     tracked_sh    := na
     tracked_sl    := na
@@ -257,7 +263,10 @@ if bull_mss
     last_bear_low  := na
     last_bull_high := na
     last_mss_dir   := 1
+    mss_pending_long  := true
+    mss_pending_short := false
 if bear_mss
+    bear_mss_sl   := _bear_mss_sl
     bear_mss_lvl  := tracked_sl
     tracked_sl    := na
     display_sl    := na
@@ -268,6 +277,8 @@ if bear_mss
     last_bull_high := na
     last_bear_low  := na
     last_mss_dir   := -1
+    mss_pending_short := true
+    mss_pending_long  := false
 
 // ================================================================================
 // STRATEGY LOGIC
@@ -301,6 +312,8 @@ if pvp_started
     last_bear_low  := na
     last_bull_high := na
     last_mss_dir   := 0
+    mss_pending_long  := false
+    mss_pending_short := false
 
 if trade_ended
     waiting_long  := false
@@ -312,13 +325,17 @@ if strategy.closedtrades > strategy.closedtrades[1]
 trade_limit_ok = trades_today < 2 and (trades_today == 0 or (trades_today == 1 and last_was_sl))
 can_enter      = is_entry and strategy.opentrades == 0 and trade_limit_ok
 
-long_setup  = can_enter and not na(vah) and close > vah and close > session_vwap and bull_mss
-short_setup = can_enter and not na(val_l) and close < val_l and close < session_vwap and bear_mss
+long_trigger  = bull_mss or (mss_pending_long and not waiting_long)
+short_trigger = bear_mss or (mss_pending_short and not waiting_short)
+
+long_setup  = can_enter and not na(vah) and close > vah and close > session_vwap and long_trigger
+short_setup = can_enter and not na(val_l) and close < val_l and close < session_vwap and short_trigger
 
 if long_setup and not waiting_short
     if not waiting_long
         waiting_long   := true
         setup_bar_l    := bar_index
+        mss_pending_long := false
     retest_lvl_l   := bull_mss_lvl
     sl_long        := na(bull_mss_sl) ? math.min(low[1], low[2]) : bull_mss_sl
 
@@ -326,6 +343,7 @@ if short_setup and not waiting_long
     if not waiting_short
         waiting_short  := true
         setup_bar_s    := bar_index
+        mss_pending_short := false
     retest_lvl_s   := bear_mss_lvl
     sl_short       := na(bear_mss_sl) ? math.max(high[1], high[2]) : bear_mss_sl
 
