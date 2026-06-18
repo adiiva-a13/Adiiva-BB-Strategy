@@ -229,6 +229,14 @@ else if bear_seq
     display_sl    := na(display_sl) ? low[0] : math.min(display_sl, low[0])
     if not na(tracked_sl)
         tracked_sl := math.min(tracked_sl, low[0])
+else if close < open
+    if not na(display_sl)
+        display_sl := math.min(display_sl, low)
+    if not na(tracked_sl)
+        tracked_sl := math.min(tracked_sl, low)
+    if not na(bear_seq_sl)
+        bear_seq_sl := math.min(bear_seq_sl, low)
+    last_bear_low := na(last_bear_low) ? low : math.min(last_bear_low, low)
 
 if bull_seq_start
     if not na(last_bear_low)
