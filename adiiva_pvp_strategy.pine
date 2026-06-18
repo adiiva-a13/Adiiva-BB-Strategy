@@ -202,6 +202,7 @@ var float bear_seq_sl    = na
 var float bull_seq_sh    = na
 var float bull_mss_lvl   = na  // swing high spart → nivel retest LONG
 var float bear_mss_lvl   = na  // swing low spart → nivel retest SHORT
+var float sh_guard       = na  // min nivel pt tracked_sh nou (previne false MSS^ in PVP)
 var float last_bear_low  = na  // low-ul intregii secvente bearish curente
 var float last_bull_high = na  // high-ul intregii secvente bullish curente
 var int   last_mss_dir   = 0   // 0=niciuna, 1=bull MSS, -1=bear MSS (alternare)
@@ -213,7 +214,7 @@ if bear_seq_start
     prior_green = close[2] > open[2]
     if not na(last_bull_high) or prior_green
         new_sh = not na(last_bull_high) ? math.max(last_bull_high, high[1], high[2]) : high[2]
-        if na(bull_mss_lvl) or new_sh >= bull_mss_lvl
+        if na(sh_guard) or new_sh >= sh_guard
             tracked_sh := na(tracked_sh) ? new_sh : math.max(tracked_sh, new_sh)
     display_sl    := na(display_sl) ? math.min(low[0], low[1]) : math.min(display_sl, low[0], low[1])
     last_bull_high := na
@@ -255,6 +256,7 @@ _bear_mss_sl = not na(bull_seq_sh) ? bull_seq_sh : tracked_sh
 if bull_mss
     bull_mss_sl   := _bull_mss_sl
     bull_mss_lvl  := tracked_sh
+    sh_guard      := tracked_sh
     tracked_sh    := na
     tracked_sl    := na
     display_sl    := na
@@ -274,6 +276,7 @@ if bear_mss
     bull_seq_sh   := na
     bear_seq_sl   := na
     bull_mss_lvl  := na
+    sh_guard      := na
     last_bull_high := na
     last_bear_low  := na
     last_mss_dir   := -1
@@ -309,11 +312,16 @@ if pvp_started
     bear_seq_sl    := na
     bull_seq_sh    := na
     bull_mss_lvl   := na
+    sh_guard       := na
     last_bear_low  := na
     last_bull_high := na
     last_mss_dir   := 0
     mss_pending_long  := false
     mss_pending_short := false
+
+entry_started = is_entry and not is_entry[1]
+if entry_started
+    sh_guard := na
 
 if trade_ended
     waiting_long  := false
@@ -325,8 +333,8 @@ if strategy.closedtrades > strategy.closedtrades[1]
 trade_limit_ok = trades_today < 2 and (trades_today == 0 or (trades_today == 1 and last_was_sl))
 can_enter      = is_entry and strategy.opentrades == 0 and trade_limit_ok
 
-long_trigger  = bull_mss or (mss_pending_long and not waiting_long)
-short_trigger = bear_mss or (mss_pending_short and not waiting_short)
+long_trigger  = bull_mss or (mss_pending_long and not waiting_long and not na(bull_mss_lvl) and close > bull_mss_lvl)
+short_trigger = bear_mss or (mss_pending_short and not waiting_short and not na(bear_mss_lvl) and close < bear_mss_lvl)
 
 long_setup  = can_enter and not na(vah) and close > vah and close > session_vwap and long_trigger
 short_setup = can_enter and not na(val_l) and close < val_l and close < session_vwap and short_trigger
