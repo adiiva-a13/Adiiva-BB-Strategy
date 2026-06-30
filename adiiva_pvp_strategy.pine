@@ -239,9 +239,11 @@ else if close < open
     last_bear_low := na(last_bear_low) ? low : math.min(last_bear_low, low)
 
 if bull_seq_start
-    if not na(last_bear_low)
-        tracked_sl := na(tracked_sl) ? last_bear_low : math.min(tracked_sl, last_bear_low)
-        display_sl := na(display_sl) ? last_bear_low : math.min(display_sl, last_bear_low)
+    prior_red = close[2] < open[2]
+    if not na(last_bear_low) or prior_red
+        new_sl     = not na(last_bear_low) ? math.min(last_bear_low, low[1], low[2]) : low[2]
+        tracked_sl := na(tracked_sl) ? new_sl : math.min(tracked_sl, new_sl)
+        display_sl := na(display_sl) ? new_sl : math.min(display_sl, new_sl)
     last_bear_low  := na
     last_bull_high := na(last_bull_high) ? math.max(high[0], high[1]) : math.max(last_bull_high, high[0], high[1])
     new_sh         = math.max(high[0], high[1])
