@@ -256,6 +256,10 @@ if not na(tracked_sl)
     tracked_sl := math.min(tracked_sl, low)
 if not na(bear_seq_sl)
     bear_seq_sl := math.min(bear_seq_sl, low)
+if not na(tracked_sh)
+    tracked_sh := math.max(tracked_sh, high)
+if not na(bull_seq_sh)
+    bull_seq_sh := math.max(bull_seq_sh, high)
 
 bull_mss = not na(tracked_sh) and close > tracked_sh and close[1] <= tracked_sh and not bear_seq_start
 bear_mss = not na(tracked_sl) and close < tracked_sl and not bull_seq_start
