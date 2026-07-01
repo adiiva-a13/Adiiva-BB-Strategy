@@ -482,6 +482,8 @@ plot(tracked_sh, "tracked_sh → BULL MSS nivel", color=color.new(color.purple, 
 
 plotshape(bull_mss,  "MSS Bullish",  shape.triangleup,   location.belowbar, color.lime,    size=size.tiny,   text="MSS^")
 plotshape(bear_mss,  "MSS Bearish",  shape.triangledown, location.abovebar, color.fuchsia, size=size.tiny,   text="MSSv")
+plotshape(bear_seq_start, "DEBUG bear_seq_start", shape.triangledown, location.abovebar, color.orange, size=size.tiny, text="B")
+plotshape(bull_seq_start, "DEBUG bull_seq_start", shape.triangleup,   location.belowbar, color.yellow, size=size.tiny, text="b")
 plotshape(long_fill,  "LONG Signal",  shape.labelup,      location.belowbar, color.green,   size=size.normal, text="LONG",  textcolor=color.white)
 plotshape(short_fill, "SHORT Signal", shape.labeldown,    location.abovebar, color.red,     size=size.normal, text="SHORT", textcolor=color.white)
 plotshape(long_fill,  "Retest LONG",  shape.circle, location.belowbar, color.new(color.lime,   40), size=size.tiny, text="R")
