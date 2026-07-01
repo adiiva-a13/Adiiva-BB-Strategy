@@ -195,110 +195,40 @@ if ny4h_ended
 bear_seq = (close < open) and (close[1] < open[1])
 bull_seq = (close > open) and (close[1] > open[1])
 
-var float tracked_sh     = na
-var float tracked_sl     = na
-var float display_sl     = na
-var float bear_seq_sl    = na
-var float bull_seq_sh    = na
-var float bull_mss_lvl   = na  // swing high spart → nivel retest LONG
-var float bear_mss_lvl   = na  // swing low spart → nivel retest SHORT
-var float sh_guard       = na  // min nivel pt tracked_sh nou (previne false MSS^ in PVP)
-var float last_bear_low  = na  // low-ul intregii secvente bearish curente
-var float last_bull_high = na  // high-ul intregii secvente bullish curente
-var int   last_mss_dir   = 0   // 0=niciuna, 1=bull MSS, -1=bear MSS (alternare)
+var float tracked_sh    = na
+var float tracked_sl    = na
+var float bear_seq_sl   = na  // low pullback bearish → SL pentru LONG
+var float bull_seq_sh   = na  // high pullback bullish → SL pentru SHORT
+var float bull_mss_lvl  = na  // swing high spart → nivel retest LONG
+var float bear_mss_lvl  = na  // swing low spart → nivel retest SHORT
 
-bear_seq_start = bear_seq and not bear_seq[1]
-bull_seq_start = bull_seq and not bull_seq[1]
+if bear_seq
+    tracked_sh  := math.max(high[2], high[3])
+    bear_seq_sl := math.min(low[0], low[1])
+if bull_seq
+    tracked_sl  := math.min(low[2], low[3])
+    bull_seq_sh := math.max(high[0], high[1])
 
-if bear_seq_start
-    new_sh = not na(last_bull_high) ? math.max(last_bull_high, high[1], high[2]) : high[2]
-    if na(sh_guard) or new_sh >= sh_guard
-        tracked_sh := new_sh
-    display_sl    := na(display_sl) ? math.min(low[0], low[1]) : math.min(display_sl, low[0], low[1])
-    last_bull_high := na
-    last_bear_low  := na(last_bear_low) ? math.min(low[0], low[1]) : math.min(last_bear_low, low[0], low[1])
-    new_sl         = math.min(low[0], low[1])
-    bear_seq_sl   := na(bear_seq_sl) ? new_sl : math.min(bear_seq_sl, new_sl)
-    if not na(tracked_sl)
-        tracked_sl := math.min(tracked_sl, new_sl)
-else if bear_seq
-    last_bear_low := na(last_bear_low) ? low[0] : math.min(last_bear_low, low[0])
-    bear_seq_sl   := na(bear_seq_sl) ? low[0] : math.min(bear_seq_sl, low[0])
-    display_sl    := na(display_sl) ? low[0] : math.min(display_sl, low[0])
-    if not na(tracked_sl)
-        tracked_sl := math.min(tracked_sl, low[0])
-else if close < open
-    if not na(display_sl)
-        display_sl := math.min(display_sl, low)
-    if not na(tracked_sl)
-        tracked_sl := math.min(tracked_sl, low)
-    if not na(bear_seq_sl)
-        bear_seq_sl := math.min(bear_seq_sl, low)
-    last_bear_low := na(last_bear_low) ? low : math.min(last_bear_low, low)
-
-if bull_seq_start
-    prior_red = close[2] < open[2]
-    if not na(last_bear_low) or prior_red
-        new_sl     = not na(last_bear_low) ? math.min(last_bear_low, low[1], low[2]) : low[2]
-        tracked_sl := new_sl
-        display_sl := na(display_sl) ? new_sl : math.min(display_sl, new_sl)
-    last_bear_low  := na
-    last_bull_high := na(last_bull_high) ? math.max(high[0], high[1]) : math.max(last_bull_high, high[0], high[1])
-    new_sh         = math.max(high[0], high[1])
-    bull_seq_sh   := na(bull_seq_sh) ? new_sh : math.max(bull_seq_sh, new_sh)
-else if bull_seq
-    last_bull_high := na(last_bull_high) ? high[0] : math.max(last_bull_high, high[0])
-    bull_seq_sh    := na(bull_seq_sh) ? high[0] : math.max(bull_seq_sh, high[0])
-
-if not na(display_sl)
-    display_sl := math.min(display_sl, low)
-if not na(tracked_sl)
-    tracked_sl := math.min(tracked_sl, low)
-if not na(bear_seq_sl)
-    bear_seq_sl := math.min(bear_seq_sl, low)
-if not na(tracked_sh)
-    tracked_sh := math.max(tracked_sh, high)
-if not na(bull_seq_sh)
-    bull_seq_sh := math.max(bull_seq_sh, high)
-
-bull_mss = not na(tracked_sh) and close > tracked_sh and close[1] <= tracked_sh and not bear_seq_start
-bear_mss = not na(tracked_sl) and close < tracked_sl and not bull_seq_start
+bull_mss = not na(tracked_sh) and close > tracked_sh and close[1] <= tracked_sh
+bear_mss = not na(tracked_sl) and close < tracked_sl and close[1] >= tracked_sl
 
 var float bull_mss_sl      = na
 var float bear_mss_sl      = na
 var bool  mss_pending_long = false
 var bool  mss_pending_short = false
 
-_bull_mss_sl = bear_seq_sl
-_bear_mss_sl = not na(bull_seq_sh) ? bull_seq_sh : tracked_sh
-
 if bull_mss
-    bull_mss_sl   := _bull_mss_sl
+    bull_mss_sl   := bear_seq_sl
     bull_mss_lvl  := tracked_sh
-    sh_guard      := tracked_sh
     tracked_sh    := na
-    tracked_sl    := na
-    display_sl    := na
     bear_seq_sl   := na
-    bull_seq_sh   := na
-    last_bear_low  := na
-    last_bull_high := na
-    last_mss_dir   := 1
     mss_pending_long  := true
     mss_pending_short := false
 if bear_mss
-    bear_mss_sl   := _bear_mss_sl
+    bear_mss_sl   := bull_seq_sh
     bear_mss_lvl  := tracked_sl
     tracked_sl    := na
-    display_sl    := na
-    tracked_sh    := na
     bull_seq_sh   := na
-    bear_seq_sl   := na
-    bull_mss_lvl  := na
-    sh_guard      := na
-    last_bull_high := na
-    last_bear_low  := na
-    last_mss_dir   := -1
     mss_pending_short := true
     mss_pending_long  := false
 
@@ -327,20 +257,12 @@ if pvp_started
     waiting_short  := false
     tracked_sh     := na
     tracked_sl     := na
-    display_sl     := na
     bear_seq_sl    := na
     bull_seq_sh    := na
     bull_mss_lvl   := na
-    sh_guard       := na
-    last_bear_low  := na
-    last_bull_high := na
-    last_mss_dir   := 0
+    bear_mss_lvl   := na
     mss_pending_long  := false
     mss_pending_short := false
-
-entry_started = is_entry and not is_entry[1]
-if entry_started
-    sh_guard := na
 
 if trade_ended
     waiting_long  := false
@@ -477,13 +399,11 @@ plot(_show_l ? _tp_l    : na, "TP Long",  color=color.new(color.green,  30), lin
 plot(_show_s ? _tp_s    : na, "TP Short", color=color.new(color.green,  30), linewidth=1, style=plot.style_linebr)
 
 plot(strategy.opentrades, "Open Trades (debug)", color=color.orange, display=display.data_window)
-plot(display_sl, "tracked_sl → BEAR MSS nivel", color=color.new(color.aqua,   50), linewidth=1, style=plot.style_stepline)
+plot(tracked_sl, "tracked_sl → BEAR MSS nivel", color=color.new(color.aqua,   50), linewidth=1, style=plot.style_stepline)
 plot(tracked_sh, "tracked_sh → BULL MSS nivel", color=color.new(color.purple, 50), linewidth=1, style=plot.style_stepline)
 
 plotshape(bull_mss,  "MSS Bullish",  shape.triangleup,   location.belowbar, color.lime,    size=size.tiny,   text="MSS^")
 plotshape(bear_mss,  "MSS Bearish",  shape.triangledown, location.abovebar, color.fuchsia, size=size.tiny,   text="MSSv")
-plotshape(bear_seq_start, "DEBUG bear_seq_start", shape.triangledown, location.abovebar, color.orange, size=size.tiny, text="B")
-plotshape(bull_seq_start, "DEBUG bull_seq_start", shape.triangleup,   location.belowbar, color.yellow, size=size.tiny, text="b")
 plotshape(long_fill,  "LONG Signal",  shape.labelup,      location.belowbar, color.green,   size=size.normal, text="LONG",  textcolor=color.white)
 plotshape(short_fill, "SHORT Signal", shape.labeldown,    location.abovebar, color.red,     size=size.normal, text="SHORT", textcolor=color.white)
 plotshape(long_fill,  "Retest LONG",  shape.circle, location.belowbar, color.new(color.lime,   40), size=size.tiny, text="R")
