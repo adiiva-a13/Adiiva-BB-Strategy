@@ -211,11 +211,9 @@ bear_seq_start = bear_seq and not bear_seq[1]
 bull_seq_start = bull_seq and not bull_seq[1]
 
 if bear_seq_start
-    prior_green = close[2] > open[2]
-    if not na(last_bull_high) or prior_green
-        new_sh = not na(last_bull_high) ? math.max(last_bull_high, high[1], high[2]) : high[2]
-        if na(sh_guard) or new_sh >= sh_guard
-            tracked_sh := new_sh
+    new_sh = not na(last_bull_high) ? math.max(last_bull_high, high[1], high[2]) : high[2]
+    if na(sh_guard) or new_sh >= sh_guard
+        tracked_sh := new_sh
     display_sl    := na(display_sl) ? math.min(low[0], low[1]) : math.min(display_sl, low[0], low[1])
     last_bull_high := na
     last_bear_low  := na(last_bear_low) ? math.min(low[0], low[1]) : math.min(last_bear_low, low[0], low[1])
